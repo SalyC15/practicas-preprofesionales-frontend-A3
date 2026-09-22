@@ -4,7 +4,7 @@ import { pullChanges } from './pull'
 import { pushOutbox } from './push'
 import { resetRetryConfig, setRetryConfig } from './retryConfig'
 import { cancelRetry, getScheduledRetryDelay, isRetryScheduled, startSync, syncNow } from './scheduler'
-import { getStatus } from './status'
+import { getStatus, setStatus, subscribe } from './status'
 
 vi.mock('./pull', () => ({ pullChanges: vi.fn() }))
 vi.mock('./push', () => ({ pushOutbox: vi.fn() }))
@@ -47,6 +47,33 @@ describe('syncNow', () => {
     expect(mockedPull).toHaveBeenCalledTimes(2)
     expect(mockedPush).toHaveBeenCalledTimes(1)
     expect(getStatus().syncing).toBe(false)
+  })
+
+  it('publica el estado final con el conteo real de pendientes en una sola actualización', async () => {
+    localStorage.setItem('access_token', 'tok')
+    mockedPull.mockResolvedValue({ applied: 0, hasMore: false })
+    mockedPush.mockResolvedValue({ applied: 0, failed: 0 })
+    await db.outbox.add({
+      clientOpId: 'still-pending',
+      entity: 'hourLog',
+      op: 'create',
+      payload: { id: 1 },
+      baseVersion: null,
+      createdAt: new Date().toISOString(),
+      attempts: 0,
+      lastError: null,
+    })
+    setStatus({ pending: 0, syncing: false })
+
+    const updates: ReturnType<typeof getStatus>[] = []
+    const unsubscribe = subscribe(() => updates.push({ ...getStatus() }))
+    await syncNow()
+    unsubscribe()
+
+    const completedUpdates = updates.filter((status) => !status.syncing)
+    expect(completedUpdates).toHaveLength(1)
+    expect(completedUpdates[0]).toMatchObject({ pending: 1 })
+    expect(completedUpdates[0].lastSyncAt).not.toBeNull()
   })
 
   it('reutiliza la corrida en curso si ya hay una sincronización en vuelo', async () => {
