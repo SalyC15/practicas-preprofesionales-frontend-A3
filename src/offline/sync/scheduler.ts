@@ -77,8 +77,8 @@ async function runSync(): Promise<void> {
 
     await pushOutbox()
 
-    setStatus({ syncing: false, lastSyncAt: new Date().toISOString() })
-    setStatus({ pending: await db.outbox.count() })
+    const pending = await db.outbox.count()
+    setStatus({ syncing: false, lastSyncAt: new Date().toISOString(), pending })
     cancelRetry()
   } catch (err) {
     console.error('sincronización falló', err)
