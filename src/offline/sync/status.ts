@@ -19,6 +19,11 @@ let state: SyncStatus = {
 const listeners = new Set<Listener>()
 let storageRevision = 0
 
+interface SharedSyncStatus {
+  pending: number
+  lastSyncAt: string | null
+}
+
 export function getStatus(): SyncStatus {
   return state
 }
@@ -43,12 +48,10 @@ export function setStatus(patch: Partial<SyncStatus>): void {
   }
 }
 
-function applySharedStatus(raw: string | null): void {
-  if (!raw) return
-
+function parseSharedStatus(raw: string): SharedSyncStatus | null {
   try {
     const value: unknown = JSON.parse(raw)
-    if (typeof value !== 'object' || value === null) return
+    if (typeof value !== 'object' || value === null) return null
 
     const shared = value as { pending?: unknown; lastSyncAt?: unknown }
     if (
@@ -56,18 +59,25 @@ function applySharedStatus(raw: string | null): void {
       (shared.pending as number) < 0 ||
       (shared.lastSyncAt !== null && typeof shared.lastSyncAt !== 'string')
     ) {
-      return
+      return null
     }
 
-    state = {
-      ...state,
+    return {
       pending: shared.pending as number,
       lastSyncAt: shared.lastSyncAt as string | null,
     }
-    for (const listener of listeners) listener()
   } catch {
-    // Ignore a malformed or partially written storage value.
+    return null
   }
+}
+
+function applySharedStatus(raw: string | null): void {
+  if (!raw) return
+  const shared = parseSharedStatus(raw)
+  if (!shared || (state.pending === shared.pending && state.lastSyncAt === shared.lastSyncAt)) return
+
+  state = { ...state, ...shared }
+  for (const listener of listeners) listener()
 }
 
 function handleStorage(event: StorageEvent): void {
