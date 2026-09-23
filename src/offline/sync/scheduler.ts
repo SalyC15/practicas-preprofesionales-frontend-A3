@@ -3,6 +3,7 @@ import { pullChanges } from './pull'
 import { pushOutbox } from './push'
 import { calculateBackoffDelay, getRetryConfig } from './retryConfig'
 import { setStatus } from './status'
+import { withSyncLock } from './syncLock'
 
 const SYNC_INTERVAL_MS = 60_000
 // Tope de rondas de pull por corrida: evita que un servidor que siempre
@@ -91,7 +92,7 @@ async function runSync(): Promise<void> {
 export function syncNow(): Promise<void> {
   cancelRetry()
   if (!currentSync) {
-    currentSync = runSync().finally(() => {
+    currentSync = withSyncLock(runSync).finally(() => {
       currentSync = null
     })
   }

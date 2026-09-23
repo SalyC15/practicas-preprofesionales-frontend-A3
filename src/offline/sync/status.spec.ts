@@ -21,4 +21,21 @@ describe('sync status store', () => {
     setStatus({ online: true })
     expect(listener).toHaveBeenCalledTimes(1)
   })
+
+  it('applies the shared pending count and last sync received from another tab', () => {
+    setStatus({ pending: 0, lastSyncAt: null })
+    const listener = vi.fn()
+    const unsubscribe = subscribe(listener)
+
+    window.dispatchEvent(
+      new StorageEvent('storage', {
+        key: 'practicas:sync-status',
+        newValue: JSON.stringify({ pending: 4, lastSyncAt: '2026-09-23T12:00:00.000Z', revision: 1 }),
+      }),
+    )
+
+    expect(getStatus()).toMatchObject({ pending: 4, lastSyncAt: '2026-09-23T12:00:00.000Z' })
+    expect(listener).toHaveBeenCalled()
+    unsubscribe()
+  })
 })
