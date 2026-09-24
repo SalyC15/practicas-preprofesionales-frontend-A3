@@ -2,7 +2,6 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { api } from '@/api/client'
 import { db } from '@/offline/db'
 import { enqueue, pushOutbox } from './push'
-import { resetRetryConfig, setRetryConfig } from './retryConfig'
 
 vi.mock('@/api/client', () => ({ api: vi.fn() }))
 
@@ -12,7 +11,6 @@ beforeEach(async () => {
   await db.delete()
   await db.open()
   mockedApi.mockReset()
-  resetRetryConfig()
 })
 
 describe('enqueue', () => {
@@ -84,7 +82,7 @@ describe('pushOutbox', () => {
     await expect(db.hourLogs.get(10)).resolves.toMatchObject({ syncState: 'synced', version: 2 })
   })
 
-  it('no borra la cola cuando el envío falla y registra el intento y último error en outbox', async () => {
+  it('conserva la operación y registra el error cuando falla la red', async () => {
     await db.hourLogs.put({
       id: 11,
       placementId: 1,
@@ -96,133 +94,78 @@ describe('pushOutbox', () => {
       status: 'SUBMITTED',
       version: 1,
       updatedAt: '2026-04-01T00:00:00.000Z',
-      syncState: 'local',
+      syncState: 'queued',
     })
-    await enqueue({
-      entity: 'hourLog',
-      op: 'create',
-      payload: { id: 11, hours: 4 },
-      baseVersion: null,
-    })
+    await enqueue({ entity: 'hourLog', op: 'create', payload: { id: 11, hours: 4 }, baseVersion: null })
+    const [entry] = await db.outbox.toArray()
+    mockedApi.mockRejectedValue(new Error('sin conexión'))
 
-    mockedApi.mockRejectedValue(new Error('Fallo de red'))
+    await expect(pushOutbox()).rejects.toThrow('sin conexión')
 
-    await expect(pushOutbox()).rejects.toThrow('Fallo de red')
-
-    // La operación NO se borró
     await expect(db.outbox.count()).resolves.toBe(1)
-    const [savedEntry] = await db.outbox.toArray()
-    expect(savedEntry.attempts).toBe(1)
-    expect(savedEntry.lastError).toBe('Fallo de red')
-
-    // Como aún no agota los intentos (por defecto max 5), sigue en 'queued'
-    await expect(db.hourLogs.get(11)).resolves.toMatchObject({ syncState: 'queued' })
-  })
-
-  it('tras agotar los reintentos marca la fila local como fallida y no la descarta de la cola', async () => {
-    setRetryConfig({ maxAttempts: 2 })
-
-    await db.hourLogs.put({
-      id: 12,
-      placementId: 1,
-      date: '2026-04-01',
-      startTime: '08:00',
-      endTime: '12:00',
-      hours: 4,
-      activity: 'Soporte',
-      status: 'SUBMITTED',
-      version: 1,
-      updatedAt: '2026-04-01T00:00:00.000Z',
-      syncState: 'local',
-    })
-    await enqueue({
-      entity: 'hourLog',
-      op: 'create',
-      payload: { id: 12, hours: 4 },
-      baseVersion: null,
-    })
-
-    mockedApi.mockRejectedValue(new Error('Servidor inaccesible'))
-
-    // Intento 1
-    await expect(pushOutbox()).rejects.toThrow('Servidor inaccesible')
-    let [entry] = await db.outbox.toArray()
-    expect(entry.attempts).toBe(1)
-    await expect(db.hourLogs.get(12)).resolves.toMatchObject({ syncState: 'queued' })
-
-    // Intento 2 (alcanza maxAttempts = 2)
-    await expect(pushOutbox()).rejects.toThrow('Servidor inaccesible')
-    ;[entry] = await db.outbox.toArray()
-    expect(entry.attempts).toBe(2)
-    expect(entry.lastError).toBe('Servidor inaccesible')
-
-    // No se descarta de la cola (sigue en outbox)
-    await expect(db.outbox.count()).resolves.toBe(1)
-    // Pero la fila queda marcada como fallida para el usuario
-    await expect(db.hourLogs.get(12)).resolves.toMatchObject({
-      syncState: 'failed',
-      reviewNote: 'Servidor inaccesible',
-    })
-  })
-
-  it('no reintenta operaciones que ya agotaron el tope máximo de intentos', async () => {
-    setRetryConfig({ maxAttempts: 3 })
-
-    // Insertamos una entrada que ya tiene 3 intentos
-    await db.outbox.add({
-      clientOpId: 'exhausted-op',
-      entity: 'hourLog',
-      op: 'create',
-      payload: { id: 13 },
-      baseVersion: null,
-      createdAt: new Date().toISOString(),
-      attempts: 3,
-      lastError: 'Agotado previamente',
-    })
-
-    const result = await pushOutbox()
-
-    expect(result).toEqual({ applied: 0, failed: 0 })
-    expect(mockedApi).not.toHaveBeenCalled()
-  })
-
-  it('solo elimina del outbox las operaciones confirmadas por el servidor', async () => {
-    await db.outbox.bulkAdd([
-      {
-        clientOpId: 'op-1',
-        entity: 'hourLog',
-        op: 'create',
-        payload: { id: 101 },
-        baseVersion: null,
-        createdAt: '2026-04-01T00:00:00.000Z',
-        attempts: 0,
-        lastError: null,
-      },
-      {
-        clientOpId: 'op-2',
-        entity: 'hourLog',
-        op: 'create',
-        payload: { id: 102 },
-        baseVersion: null,
-        createdAt: '2026-04-01T00:01:00.000Z',
-        attempts: 0,
-        lastError: null,
-      },
+    await expect(db.outbox.toArray()).resolves.toEqual([
+      expect.objectContaining({ attempts: 1, lastError: 'sin conexión' }),
     ])
 
     mockedApi.mockResolvedValue({
+      results: [{ clientOpId: entry.clientOpId, status: 'applied', server: { id: 11, version: 2 }, reason: null }],
+    })
+    await expect(pushOutbox()).resolves.toEqual({ applied: 1, failed: 0 })
+    await expect(db.outbox.count()).resolves.toBe(0)
+  })
+
+  it('elimina solo las operaciones confirmadas y conserva el rechazo con su motivo', async () => {
+    await db.hourLogs.bulkPut([
+      {
+        id: 12,
+        placementId: 1,
+        date: '2026-04-01',
+        startTime: '08:00',
+        endTime: '12:00',
+        hours: 4,
+        activity: 'Soporte',
+        status: 'SUBMITTED',
+        version: 1,
+        updatedAt: '2026-04-01T00:00:00.000Z',
+        syncState: 'queued',
+      },
+      {
+        id: 13,
+        placementId: 1,
+        date: '2026-04-02',
+        startTime: '08:00',
+        endTime: '12:00',
+        hours: 4,
+        activity: 'Soporte',
+        status: 'SUBMITTED',
+        version: 1,
+        updatedAt: '2026-04-02T00:00:00.000Z',
+        syncState: 'queued',
+      },
+    ])
+    await enqueue({ entity: 'hourLog', op: 'create', payload: { id: 12, hours: 4 }, baseVersion: null })
+    await enqueue({ entity: 'hourLog', op: 'create', payload: { id: 13, hours: 4 }, baseVersion: null })
+    const entries = await db.outbox.orderBy('createdAt').toArray()
+
+    mockedApi.mockResolvedValue({
       results: [
-        { clientOpId: 'op-1', status: 'applied', server: { id: 101, version: 2 }, reason: null },
-        { clientOpId: 'op-2', status: 'rejected', server: null, reason: 'Placement no existe' },
+        { clientOpId: entries[0].clientOpId, status: 'applied', server: { id: 12, version: 2 }, reason: null },
+        { clientOpId: entries[1].clientOpId, status: 'rejected', server: { id: 13 }, reason: 'horas fuera de plazo' },
       ],
     })
 
-    await pushOutbox()
-
-    // Solo op-1 fue confirmada y eliminada; op-2 permanece en outbox
-    const remaining = await db.outbox.toArray()
-    expect(remaining).toHaveLength(1)
-    expect(remaining[0].clientOpId).toBe('op-2')
-    expect(remaining[0].lastError).toBe('Placement no existe')
+    await expect(pushOutbox()).resolves.toEqual({ applied: 1, failed: 1 })
+    await expect(db.outbox.count()).resolves.toBe(1)
+    await expect(db.outbox.toArray()).resolves.toEqual([
+      expect.objectContaining({
+        clientOpId: entries[1].clientOpId,
+        attempts: 1,
+        lastError: 'horas fuera de plazo',
+      }),
+    ])
+    await expect(db.hourLogs.get(13)).resolves.toMatchObject({
+      syncState: 'failed',
+      reviewNote: 'horas fuera de plazo',
+    })
   })
 })
