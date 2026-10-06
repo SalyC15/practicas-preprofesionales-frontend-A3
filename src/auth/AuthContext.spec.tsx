@@ -1,15 +1,18 @@
 import type { ReactNode } from 'react'
-import { act, renderHook } from '@testing-library/react'
-import { MemoryRouter } from 'react-router-dom'
+import { act, render, renderHook, screen } from '@testing-library/react'
+import { MemoryRouter, Route, Routes } from 'react-router-dom'
+import { RequireRole } from './RequireRole'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { api } from '@/api/client'
 import { db } from '@/offline/db'
 import { AuthProvider, useAuth } from './AuthContext'
 
-vi.mock('@/api/client', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('@/api/client')>()
-  return { ...actual, api: vi.fn() }
-})
+const fetchMock = vi.fn()
+function mockLogin() {
+  fetchMock.mockResolvedValue({
+    ok: true, status: 200,
+    json: async () => ({ accessToken: 'tok-123', user: { id: 5, email: 'empresa0@miyura.com', fullName: 'Empresa 0', role: 'COMPANY', companyId: 1 } }),
+  })
+}
 
 function wrapper({ children }: { children: ReactNode }) {
   return <MemoryRouter>{children}</MemoryRouter>
@@ -23,9 +26,10 @@ function withProvider({ children }: { children: ReactNode }) {
   )
 }
 
-beforeEach(() => localStorage.clear())
+beforeEach(() => { localStorage.clear(); vi.stubGlobal('fetch', fetchMock) })
 afterEach(() => {
   vi.clearAllMocks()
+  vi.unstubAllGlobals()
   localStorage.clear()
 })
 
@@ -36,13 +40,24 @@ describe('useAuth', () => {
 })
 
 describe('AuthProvider', () => {
+  it('does not redirect a restored session before hydration finishes', () => {
+    localStorage.setItem('access_token', 'legacy-token')
+    localStorage.setItem('user', JSON.stringify({ id: 1, role: 'STUDENT' }))
+    render(<MemoryRouter initialEntries={['/protected']}><AuthProvider><Routes>
+      <Route path="/protected" element={<RequireRole roles={['STUDENT']}>Sesión restaurada</RequireRole>} />
+      <Route path="/login" element={<div>Pantalla de login</div>} />
+    </Routes></AuthProvider></MemoryRouter>)
+    expect(screen.queryByText('Pantalla de login')).toBeNull()
+    expect(screen.getByText('Sesión restaurada')).toBeInTheDocument()
+  })
   it('starts with no user when localStorage is empty', () => {
     const { result } = renderHook(() => useAuth(), { wrapper: withProvider })
     expect(result.current.user).toBeNull()
     expect(result.current.role).toBeNull()
   })
 
-  it('restores a valid stored user on init', () => {
+  it('restores a valid stored user with an access token on init', () => {
+    localStorage.setItem('access_token', 'legacy-token')
     localStorage.setItem(
       'user',
       JSON.stringify({ id: 1, email: 'coordinador@miyura.com', fullName: 'Coordinación', role: 'COORDINATOR', companyId: null }),
@@ -59,30 +74,24 @@ describe('AuthProvider', () => {
   })
 
   it('login stores the token and user, and updates the context', async () => {
-    vi.mocked(api).mockResolvedValue({
-      accessToken: 'tok-123',
-      user: { id: 5, email: 'empresa0@miyura.com', fullName: 'Empresa 0', role: 'COMPANY', companyId: 1 },
-    })
+    mockLogin()
     const { result } = renderHook(() => useAuth(), { wrapper: withProvider })
 
     await act(async () => {
       await result.current.login('empresa0@miyura.com', 'yura1234')
     })
 
-    expect(api).toHaveBeenCalledWith('/auth/login', {
-      method: 'POST',
+    expect(fetchMock).toHaveBeenCalledWith(expect.stringContaining('/auth/login'), expect.objectContaining({
+      method: 'POST', credentials: 'include', signal: expect.any(AbortSignal),
       body: JSON.stringify({ email: 'empresa0@miyura.com', password: 'yura1234' }),
-    })
+    }))
     expect(localStorage.getItem('access_token')).toBe('tok-123')
     expect(result.current.user?.companyId).toBe(1)
     expect(result.current.role).toBe('COMPANY')
   })
 
   it('logout clears storage and the context', async () => {
-    vi.mocked(api).mockResolvedValue({
-      accessToken: 'tok-123',
-      user: { id: 5, email: 'empresa0@miyura.com', fullName: 'Empresa 0', role: 'COMPANY', companyId: 1 },
-    })
+    mockLogin()
     const { result } = renderHook(() => useAuth(), { wrapper: withProvider })
     await act(async () => {
       await result.current.login('empresa0@miyura.com', 'yura1234')
@@ -116,10 +125,7 @@ describe('AuthProvider', () => {
     })
     await db.meta.put({ key: 'syncCheckpoint', value: '2026-01-01T00:00:00.000Z' })
 
-    vi.mocked(api).mockResolvedValue({
-      accessToken: 'tok-123',
-      user: { id: 5, email: 'empresa0@miyura.com', fullName: 'Empresa 0', role: 'COMPANY', companyId: 1 },
-    })
+    mockLogin()
     const { result } = renderHook(() => useAuth(), { wrapper: withProvider })
     await act(async () => {
       await result.current.login('empresa0@miyura.com', 'yura1234')
