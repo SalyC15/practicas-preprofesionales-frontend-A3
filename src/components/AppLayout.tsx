@@ -55,7 +55,7 @@ function initialsOf(fullName: string | undefined): string {
 }
 
 export function AppLayout() {
-  const { user, role, logout } = useAuth()
+  const { user, role, logout, refresh, renewing, expiresAt, sessionMessage } = useAuth()
 
   // Se llama una sola vez para toda la sesión autenticada: AppLayout envuelve
   // todas las rutas protegidas vía <Outlet />, así que no se remonta al
@@ -89,12 +89,24 @@ export function AppLayout() {
               <span className="block text-11 text-inkSoft">{role ? ROLE_LABEL[role] : ''}</span>
             </span>
           </div>
+          {expiresAt !== null && (
+            <Button type="button" variant="outline" size="sm" disabled={renewing}
+              onClick={() => { void refresh().catch(() => {}) }}>
+              {renewing ? 'Renovando…' : 'Renovar sesión'}
+            </Button>
+          )}
           <Button type="button" variant="outline" size="sm" onClick={logout}>
             Salir
           </Button>
         </div>
       </header>
 
+      {expiresAt !== null && (
+        <p role="status" className="px-4 py-2 text-13 text-inkMid">
+          Tu sesión vence a las {new Date(expiresAt).toLocaleTimeString('es')}. Podés renovarla antes de que expire.
+        </p>
+      )}
+      {sessionMessage && <p role="alert" className="px-4 py-2 text-void">{sessionMessage}</p>}
       <div className="flex min-h-0 flex-1 flex-col md:grid md:grid-cols-[theme(width.sidebar)_1fr]">
         <div className="flex min-h-0 flex-col gap-3 px-3.5 py-3.5 md:pr-2">
           <nav

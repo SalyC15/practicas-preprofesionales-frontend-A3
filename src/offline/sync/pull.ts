@@ -1,5 +1,7 @@
 import { api } from '@/api/client'
 import { db, type LocalDocument, type LocalEvaluation, type LocalHourLog, type LocalPlacement } from '@/offline/db'
+import { isFenceCurrent, sessionCoordinator, type SessionFence } from '@/auth/session'
+import { withSyncLock } from './syncLock'
 
 type Tombstoned<T> = T & { deletedAt?: string | null }
 
@@ -53,30 +55,55 @@ async function applyEvaluations(rows: PullChanges['evaluations']): Promise<void>
   }
 }
 
-export async function pullChanges(): Promise<{ applied: number; hasMore: boolean }> {
-  const savedCheckpoint = await db.meta.get('checkpoint')
+export async function pullChanges(
+  fence: SessionFence = sessionCoordinator.capture(),
+): Promise<{ applied: number; hasMore: boolean }> {
+  if (!isFenceCurrent(fence)) return { applied: 0, hasMore: false }
+
+  const savedCheckpoint = await withSyncLock(async () => {
+    if (!isFenceCurrent(fence)) return undefined
+    return db.meta.get('checkpoint')
+  })
+
+  if (!isFenceCurrent(fence)) return { applied: 0, hasMore: false }
 
   const params = new URLSearchParams()
   if (savedCheckpoint) params.set('since', savedCheckpoint.value)
   params.set('limit', '200')
 
-  const response = await api<PullResponse>(`/sync/pull?${params.toString()}`)
+  let response: PullResponse
+  try {
+    response = await api<PullResponse>(`/sync/pull?${params.toString()}`, {
+      signal: fence.signal,
+    })
+  } catch (error) {
+    if (!isFenceCurrent(fence)) return { applied: 0, hasMore: false }
+    throw error
+  }
+
+  if (!isFenceCurrent(fence) || !response?.changes) return { applied: 0, hasMore: false }
   const { changes, checkpoint, hasMore } = response
 
-  await db.transaction(
-    'rw',
-    [db.placements, db.hourLogs, db.documents, db.evaluations, db.outbox, db.meta],
-    async () => {
-      await applyPlacements(changes.placements)
-      await applyHourLogs(changes.hourLogs)
-      await applyDocuments(changes.documents)
-      await applyEvaluations(changes.evaluations)
+  await withSyncLock(async () => {
+    if (!isFenceCurrent(fence)) return
+    await db.transaction(
+      'rw',
+      [db.placements, db.hourLogs, db.documents, db.evaluations, db.outbox, db.meta],
+      async () => {
+        if (!isFenceCurrent(fence)) return
+        await applyPlacements(changes.placements)
+        await applyHourLogs(changes.hourLogs)
+        await applyDocuments(changes.documents)
+        await applyEvaluations(changes.evaluations)
 
-      if (checkpoint != null) {
-        await db.meta.put({ key: 'checkpoint', value: checkpoint })
-      }
-    },
-  )
+        if (checkpoint != null) {
+          await db.meta.put({ key: 'checkpoint', value: checkpoint })
+        }
+      },
+    )
+  })
+
+  if (!isFenceCurrent(fence)) return { applied: 0, hasMore: false }
 
   const applied =
     changes.placements.length + changes.hourLogs.length + changes.documents.length + changes.evaluations.length

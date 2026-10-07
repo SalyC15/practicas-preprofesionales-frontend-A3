@@ -6,3 +6,4 @@ coverage
 eslint-report.json
 .env
 .yura-ci/
+odd/
