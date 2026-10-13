@@ -7,7 +7,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 
 export function LoginPage() {
-  const { login } = useAuth()
+  const { login, sessionMessage } = useAuth()
   const navigate = useNavigate()
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
@@ -46,6 +46,7 @@ export function LoginPage() {
             Con el correo institucional que te dio la unidad de vinculación.
           </p>
 
+          {sessionMessage && <p role="status" className="mt-4 text-14 text-void">{sessionMessage}</p>}
           <form className="mt-6 flex flex-col gap-4" onSubmit={handleSubmit} noValidate>
             <div className="flex flex-col gap-1.5">
               <Label htmlFor="email">Correo institucional</Label>

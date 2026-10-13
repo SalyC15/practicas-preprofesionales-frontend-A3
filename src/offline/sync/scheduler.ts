@@ -1,4 +1,5 @@
 import { db } from '@/offline/db'
+import { isFenceCurrent, sessionCoordinator } from '@/auth/session'
 import { pullChanges } from './pull'
 import { pushOutbox } from './push'
 import { setStatus } from './status'
@@ -13,9 +14,13 @@ function hasSession(): boolean {
 }
 
 let currentSync: Promise<void> | null = null
+let currentSyncGeneration = -1
 
 async function runSync(): Promise<void> {
   if (!hasSession()) return
+
+  const fence = sessionCoordinator.capture()
+  if (!isFenceCurrent(fence)) return
 
   setStatus({ syncing: true })
 
@@ -23,24 +28,33 @@ async function runSync(): Promise<void> {
     let hasMore = true
     let rounds = 0
     while (hasMore && rounds < MAX_PULL_ROUNDS) {
-      const result = await pullChanges()
+      if (!isFenceCurrent(fence)) break
+      const result = await pullChanges(fence)
       hasMore = result.hasMore
       rounds += 1
     }
 
-    await pushOutbox()
+    if (isFenceCurrent(fence)) {
+      await pushOutbox(fence)
+    }
 
-    setStatus({ syncing: false, lastSyncAt: new Date().toISOString() })
-    setStatus({ pending: await db.outbox.count() })
+    if (isFenceCurrent(fence)) {
+      setStatus({ syncing: false, lastSyncAt: new Date().toISOString() })
+      setStatus({ pending: await db.outbox.count() })
+    }
   } catch (err) {
-    console.error('sincronización falló', err)
-    setStatus({ syncing: false })
+    if (isFenceCurrent(fence)) {
+      console.error('sincronización falló', err)
+      setStatus({ syncing: false })
+    }
   }
 }
 
 /** Corre pull + push. Si ya hay una corrida en curso, la reutiliza en vez de duplicarla. */
 export function syncNow(): Promise<void> {
-  if (!currentSync) {
+  const currentGen = sessionCoordinator.capture().generation
+  if (!currentSync || currentSyncGeneration !== currentGen) {
+    currentSyncGeneration = currentGen
     currentSync = runSync().finally(() => {
       currentSync = null
     })

@@ -1,7 +1,6 @@
-import { createContext, useContext, useState, type ReactNode } from 'react'
+import { createContext, useContext, useEffect, useState, useSyncExternalStore, type ReactNode } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { api } from '@/api/client'
-import { db } from '@/offline/db'
+import { sessionCoordinator } from './session'
 
 export type Role = 'STUDENT' | 'TUTOR' | 'COMPANY' | 'COORDINATOR'
 
@@ -10,64 +9,51 @@ export interface AuthUser {
   email: string
   fullName: string
   role: Role
-  // Solo relevante para Role.COMPANY (ver User.companyId en el backend); el
-  // resto de roles lo trae null. CompanyOffersPage lo usa para armar
-  // CreateOfferDto sin tener que adivinar o listar todas las empresas.
+  // Only COMPANY users have a companyId.
   companyId: number | null
-}
-
-interface LoginResponse {
-  accessToken: string
-  user: AuthUser
 }
 
 interface AuthContextValue {
   user: AuthUser | null
   role: Role | null
+  sessionMessage: string | null
+  expiresAt: number | null
+  renewing: boolean
   login: (email: string, password: string) => Promise<void>
   logout: () => Promise<void>
+  refresh: () => Promise<void>
 }
 
 const AuthContext = createContext<AuthContextValue | null>(null)
 
-function readStoredUser(): AuthUser | null {
-  const raw = localStorage.getItem('user')
-  if (!raw) return null
-  try {
-    return JSON.parse(raw) as AuthUser
-  } catch {
-    return null
-  }
-}
-
 export function AuthProvider({ children }: { children: ReactNode }) {
-  const [user, setUser] = useState<AuthUser | null>(() => readStoredUser())
+  const state = useSyncExternalStore(sessionCoordinator.subscribe, sessionCoordinator.getSnapshot)
   const navigate = useNavigate()
+  const [ready, setReady] = useState(false)
+  useEffect(() => {
+    sessionCoordinator.start()
+    setReady(true)
+    return sessionCoordinator.stop
+  }, [])
+  useEffect(() => {
+    if (!state.user && state.message) navigate('/login', { replace: true })
+  }, [state.user, state.message, navigate])
 
-  async function login(email: string, password: string) {
-    const { accessToken, user: loggedUser } = await api<LoginResponse>('/auth/login', {
-      method: 'POST',
-      body: JSON.stringify({ email, password }),
-    })
-    localStorage.setItem('access_token', accessToken)
-    localStorage.setItem('user', JSON.stringify(loggedUser))
-    setUser(loggedUser)
-  }
-
-  // Una máquina de laboratorio compartida es el caso normal de este dominio:
-  // si no se borra Dexie, el checkpoint de sync y los datos del estudiante
-  // anterior sobreviven a esta sesión y contaminan la del siguiente.
   async function logout() {
-    await db.delete()
-    await db.open()
-    localStorage.removeItem('access_token')
-    localStorage.removeItem('user')
-    setUser(null)
-    navigate('/login')
+    const pending = sessionCoordinator.logout()
+    navigate('/login', { replace: true })
+    await pending
   }
+
+  // Protected routes must not render a redirect while startup hydration is pending.
+  if (!ready) return null
 
   return (
-    <AuthContext.Provider value={{ user, role: user?.role ?? null, login, logout }}>
+    <AuthContext.Provider value={{
+      user: state.user, role: state.user?.role ?? null,
+      sessionMessage: state.message, expiresAt: state.expiresAt, renewing: state.renewing,
+      login: sessionCoordinator.login, logout, refresh: sessionCoordinator.refresh,
+    }}>
       {children}
     </AuthContext.Provider>
   )

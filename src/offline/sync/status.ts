@@ -25,6 +25,14 @@ export function setStatus(patch: Partial<SyncStatus>): void {
   for (const listener of listeners) listener()
 }
 
+export function resetSyncStatus(): void {
+  setStatus({
+    pending: 0,
+    lastSyncAt: null,
+    syncing: false,
+  })
+}
+
 export function subscribe(listener: Listener): () => void {
   listeners.add(listener)
   return () => {
