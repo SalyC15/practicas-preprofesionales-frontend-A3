@@ -5,6 +5,8 @@ import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { db, type LocalHourLog } from '@/offline/db'
 import { enqueue } from '@/offline/sync/push'
+import { validateHourLogCalendarDate } from '@/lib/date'
+import { getCurrentDateInInstitutionTz, INSTITUTION_TIMEZONE } from '@/lib/institution-timezone'
 
 interface HourLogFormProps {
   placementId: number
@@ -21,11 +23,7 @@ interface FormErrors {
 
 // Fecha de hoy en formato YYYY-MM-DD, tal como la espera un <input type="date">.
 function todayAsInputValue(): string {
-  const now = new Date()
-  const year = now.getFullYear()
-  const month = String(now.getMonth() + 1).padStart(2, '0')
-  const day = String(now.getDate()).padStart(2, '0')
-  return `${year}-${month}-${day}`
+  return getCurrentDateInInstitutionTz(INSTITUTION_TIMEZONE)
 }
 
 // Convierte la fecha elegida (YYYY-MM-DD) a una etiqueta legible en español
@@ -67,8 +65,9 @@ function computeDurationLabel(startTime: string, endTime: string): string | null
 
 // D-06 (copia 3): límite de horas por registro. El DTO del backend acepta
 // hasta 12 horas y su propio servicio corta en 10; aquí, en el formulario,
-// el tope es 8. Los tres umbrales divergen a propósito y no se unifican.
-function validateHoursOnSubmit(hours: string, startTime: string, endTime: string): string | null {
+// el tope es 8. Los tres umbrales divergen a propósito y no se unifican entre
+// capas; esta función se comparte únicamente entre el aviso en vivo y submit.
+function validateHours(hours: string, startTime: string, endTime: string): string | null {
   const hoursValue = Number(hours)
   if (!hours || Number.isNaN(hoursValue)) {
     return 'Ingresa un número de horas válido'
@@ -85,24 +84,157 @@ function validateHoursOnSubmit(hours: string, startTime: string, endTime: string
   return null
 }
 
-// Mismo chequeo que arriba, copiado (no reutilizado) para el aviso que se
-// muestra en vivo bajo el campo Horas mientras el estudiante escribe, antes
-// de siquiera intentar guardar.
-function validateHoursLive(hours: string, startTime: string, endTime: string): string | null {
-  const hoursValue = Number(hours)
-  if (!hours || Number.isNaN(hoursValue)) {
-    return 'Ingresa un número de horas válido'
+async function validateDateForPlacement(placementId: number, date: string): Promise<string | null> {
+  if (!date) return 'La fecha es obligatoria'
+
+  const placement = await db.placements.get(placementId)
+  return placement
+    ? validateHourLogCalendarDate(
+        date,
+        placement.startDate,
+        placement.endDate,
+        getCurrentDateInInstitutionTz(INSTITUTION_TIMEZONE),
+      )
+    : 'No se pudo validar el período de la práctica en este dispositivo'
+}
+
+async function buildFormErrors(
+  placementId: number,
+  date: string,
+  startTime: string,
+  endTime: string,
+  hours: string,
+  activity: string,
+): Promise<FormErrors> {
+  const nextErrors: FormErrors = {}
+  const dateMessage = await validateDateForPlacement(placementId, date)
+  if (dateMessage) nextErrors.date = dateMessage
+
+  if (!startTime) {
+    nextErrors.startTime = 'La hora de inicio es obligatoria'
   }
-  if (hoursValue <= 0) {
-    return 'Las horas deben ser mayores a 0'
+  if (!endTime) {
+    nextErrors.endTime = 'La hora de fin es obligatoria'
   }
-  if (hoursValue > 8) {
-    return 'No puedes registrar más de 8 horas en un mismo día'
+  if (!activity.trim()) {
+    nextErrors.activity = 'Describe la actividad realizada'
   }
-  if (startTime && endTime && endTime <= startTime) {
-    return 'La hora de fin debe ser posterior a la de inicio'
+
+  const hoursMessage = validateHours(hours, startTime, endTime)
+  if (hoursMessage) {
+    nextErrors.hours = hoursMessage
   }
-  return null
+
+  return nextErrors
+}
+
+interface HourLogSubmitValues {
+  placementId: number
+  date: string
+  startTime: string
+  endTime: string
+  hours: string
+  activity: string
+}
+
+interface HourLogSubmitActions {
+  setErrors: (errors: FormErrors) => void
+  setSubmitting: (submitting: boolean) => void
+  setSubmitError: (error: string | null) => void
+  resetForm: () => void
+  onSaved?: () => void
+}
+
+function renderFieldError(message: string | undefined, id: string) {
+  if (!message) return null
+  return (
+    <p id={id} role="alert" className="text-12 text-void">
+      {message}
+    </p>
+  )
+}
+
+async function submitHourLog(
+  event: FormEvent<HTMLFormElement>,
+  values: HourLogSubmitValues,
+  actions: HourLogSubmitActions,
+) {
+  event.preventDefault()
+  actions.setSubmitError(null)
+  actions.setSubmitting(true)
+
+  try {
+    const nextErrors = await buildFormErrors(
+      values.placementId,
+      values.date,
+      values.startTime,
+      values.endTime,
+      values.hours,
+      values.activity,
+    )
+    actions.setErrors(nextErrors)
+    if (Object.keys(nextErrors).length > 0) return
+
+    // Id local temporal: negativo para no chocar jamás con un id real del
+    // servidor (que siempre es positivo). Cuando el servidor confirme el
+    // registro, applyResults lo reemplaza; hasta entonces vive solo aquí,
+    // en este dispositivo, y la UI nunca lo muestra tal cual.
+    const localId = -Date.now()
+    const nowIso = new Date().toISOString()
+    const hoursValue = Number(values.hours)
+    const trimmedActivity = values.activity.trim()
+
+    const row: LocalHourLog = {
+      id: localId,
+      placementId: values.placementId,
+      date: values.date,
+      startTime: values.startTime,
+      endTime: values.endTime,
+      hours: hoursValue,
+      activity: trimmedActivity,
+      status: 'SUBMITTED',
+      reviewNote: null,
+      version: 1,
+      updatedAt: nowIso,
+      syncState: 'local',
+    }
+
+    // Misma transacción para las dos escrituras: si enqueue() falla, la
+    // fila no queda huérfana en 'local' sin que el usuario se entere.
+    await db.transaction('rw', [db.hourLogs, db.outbox], async () => {
+      // 1) Escribe local primero: esto es lo único que hace falta para que
+      // el registro sobreviva a un refresh sin red — no depende de fetch.
+      await db.hourLogs.add(row)
+
+      // 2) Encola la operación para cuando haya conexión. enqueue() marca
+      // la fila como 'queued' apenas se agrega a la cola de salida.
+      await enqueue({
+        entity: 'hourLog',
+        op: 'create',
+        payload: {
+          id: row.id,
+          placementId: row.placementId,
+          date: row.date,
+          startTime: row.startTime,
+          endTime: row.endTime,
+          hours: row.hours,
+          activity: row.activity,
+          status: row.status,
+          reviewNote: row.reviewNote,
+          version: row.version,
+          updatedAt: row.updatedAt,
+        },
+        baseVersion: null,
+      })
+    })
+
+    actions.resetForm()
+    actions.onSaved?.()
+  } catch {
+    actions.setSubmitError('No se pudo guardar el registro en este dispositivo. Intenta de nuevo.')
+  } finally {
+    actions.setSubmitting(false)
+  }
 }
 
 export function HourLogForm({ placementId, onSaved }: HourLogFormProps) {
@@ -117,7 +249,7 @@ export function HourLogForm({ placementId, onSaved }: HourLogFormProps) {
 
   const confirmationLabel = formatDateForConfirmation(date)
   const durationLabel = computeDurationLabel(startTime, endTime)
-  const liveHoursWarning = hours ? validateHoursLive(hours, startTime, endTime) : null
+  const liveHoursWarning = hours ? validateHours(hours, startTime, endTime) : null
 
   function resetForm() {
     setDate(todayAsInputValue())
@@ -128,103 +260,12 @@ export function HourLogForm({ placementId, onSaved }: HourLogFormProps) {
     setErrors({})
   }
 
-  function buildErrors(): FormErrors {
-    const nextErrors: FormErrors = {}
-
-    if (!date) {
-      nextErrors.date = 'La fecha es obligatoria'
-    }
-    if (!startTime) {
-      nextErrors.startTime = 'La hora de inicio es obligatoria'
-    }
-    if (!endTime) {
-      nextErrors.endTime = 'La hora de fin es obligatoria'
-    }
-    if (!activity.trim()) {
-      nextErrors.activity = 'Describe la actividad realizada'
-    }
-
-    const hoursMessage = validateHoursOnSubmit(hours, startTime, endTime)
-    if (hoursMessage) {
-      nextErrors.hours = hoursMessage
-    }
-
-    return nextErrors
-  }
-
-  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault()
-    setSubmitError(null)
-
-    const nextErrors = buildErrors()
-    setErrors(nextErrors)
-    if (Object.keys(nextErrors).length > 0) {
-      return
-    }
-
-    setSubmitting(true)
-
-    // Id local temporal: negativo para no chocar jamás con un id real del
-    // servidor (que siempre es positivo). Cuando el servidor confirme el
-    // registro, applyResults lo reemplaza; hasta entonces vive solo aquí,
-    // en este dispositivo, y la UI nunca lo muestra tal cual.
-    const localId = -Date.now()
-    const nowIso = new Date().toISOString()
-    const hoursValue = Number(hours)
-    const trimmedActivity = activity.trim()
-
-    const row: LocalHourLog = {
-      id: localId,
-      placementId,
-      date,
-      startTime,
-      endTime,
-      hours: hoursValue,
-      activity: trimmedActivity,
-      status: 'SUBMITTED',
-      reviewNote: null,
-      version: 1,
-      updatedAt: nowIso,
-      syncState: 'local',
-    }
-
-    try {
-      // Misma transacción para las dos escrituras: si enqueue() falla, la
-      // fila no queda huérfana en 'local' sin que el usuario se entere.
-      await db.transaction('rw', [db.hourLogs, db.outbox], async () => {
-        // 1) Escribe local primero: esto es lo único que hace falta para que
-        // el registro sobreviva a un refresh sin red — no depende de fetch.
-        await db.hourLogs.add(row)
-
-        // 2) Encola la operación para cuando haya conexión. enqueue() marca
-        // la fila como 'queued' apenas se agrega a la cola de salida.
-        await enqueue({
-          entity: 'hourLog',
-          op: 'create',
-          payload: {
-            id: row.id,
-            placementId: row.placementId,
-            date: row.date,
-            startTime: row.startTime,
-            endTime: row.endTime,
-            hours: row.hours,
-            activity: row.activity,
-            status: row.status,
-            reviewNote: row.reviewNote,
-            version: row.version,
-            updatedAt: row.updatedAt,
-          },
-          baseVersion: null,
-        })
-      })
-
-      resetForm()
-      onSaved?.()
-    } catch {
-      setSubmitError('No se pudo guardar el registro en este dispositivo. Intenta de nuevo.')
-    } finally {
-      setSubmitting(false)
-    }
+  function handleSubmit(event: FormEvent<HTMLFormElement>) {
+    void submitHourLog(
+      event,
+      { placementId, date, startTime, endTime, hours, activity },
+      { setErrors, setSubmitting, setSubmitError, resetForm, onSaved },
+    )
   }
 
   return (
@@ -234,6 +275,7 @@ export function HourLogForm({ placementId, onSaved }: HourLogFormProps) {
         <Input
           id="hourlog-date"
           type="date"
+          max={todayAsInputValue()}
           value={date}
           onChange={(event) => setDate(event.target.value)}
           aria-invalid={Boolean(errors.date)}
@@ -243,11 +285,7 @@ export function HourLogForm({ placementId, onSaved }: HourLogFormProps) {
         {confirmationLabel ? (
           <p className="font-data text-12 text-inkSoft">{confirmationLabel}</p>
         ) : null}
-        {errors.date ? (
-          <p id="hourlog-date-error" role="alert" className="text-12 text-void">
-            {errors.date}
-          </p>
-        ) : null}
+        {renderFieldError(errors.date, 'hourlog-date-error')}
       </div>
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
@@ -262,11 +300,7 @@ export function HourLogForm({ placementId, onSaved }: HourLogFormProps) {
             aria-describedby={errors.startTime ? 'hourlog-start-error' : undefined}
             className="font-data"
           />
-          {errors.startTime ? (
-            <p id="hourlog-start-error" role="alert" className="text-12 text-void">
-              {errors.startTime}
-            </p>
-          ) : null}
+          {renderFieldError(errors.startTime, 'hourlog-start-error')}
         </div>
 
         <div className="flex flex-col gap-1.5">
@@ -280,11 +314,7 @@ export function HourLogForm({ placementId, onSaved }: HourLogFormProps) {
             aria-describedby={errors.endTime ? 'hourlog-end-error' : undefined}
             className="font-data"
           />
-          {errors.endTime ? (
-            <p id="hourlog-end-error" role="alert" className="text-12 text-void">
-              {errors.endTime}
-            </p>
-          ) : null}
+          {renderFieldError(errors.endTime, 'hourlog-end-error')}
         </div>
       </div>
 
@@ -308,11 +338,7 @@ export function HourLogForm({ placementId, onSaved }: HourLogFormProps) {
         {liveHoursWarning && !errors.hours ? (
           <p className="text-12 text-pending">{liveHoursWarning}</p>
         ) : null}
-        {errors.hours ? (
-          <p id="hourlog-hours-error" role="alert" className="text-12 text-void">
-            {errors.hours}
-          </p>
-        ) : null}
+        {renderFieldError(errors.hours, 'hourlog-hours-error')}
       </div>
 
       <div className="flex flex-col gap-1.5">
@@ -326,11 +352,7 @@ export function HourLogForm({ placementId, onSaved }: HourLogFormProps) {
           rows={3}
           placeholder="Qué hiciste durante este bloque de horas"
         />
-        {errors.activity ? (
-          <p id="hourlog-activity-error" role="alert" className="text-12 text-void">
-            {errors.activity}
-          </p>
-        ) : null}
+        {renderFieldError(errors.activity, 'hourlog-activity-error')}
       </div>
 
       {submitError ? (

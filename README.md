@@ -41,6 +41,15 @@ pnpm dev
 Queda escuchando en `http://localhost:5173`. `VITE_API_URL` en `.env` apunta por defecto a
 `http://localhost:3000/api`.
 
+### Fechas de práctica
+
+`HourLog.date` es un día calendario (`YYYY-MM-DD`), no un instante: el formulario conserva ese
+texto sin convertirlo al guardar en Dexie ni al añadirlo al outbox. `VITE_INSTITUTION_TIMEZONE`
+define el día institucional usado para la fecha predeterminada, el máximo del formulario y la
+validación offline. Su valor predeterminado es `America/Guayaquil`; alinéalo con
+`INSTITUTION_TIMEZONE` en el backend. La validación del cliente ayuda a trabajar sin conexión,
+pero el backend sigue siendo la autoridad al sincronizar.
+
 ### Usuarios del seed
 
 Contraseña `yura1234` para todos:
