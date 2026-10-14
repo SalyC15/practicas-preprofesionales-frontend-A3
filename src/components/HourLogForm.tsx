@@ -5,6 +5,8 @@ import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { db, type LocalHourLog } from '@/offline/db'
 import { enqueue } from '@/offline/sync/push'
+import { validateHourLogCalendarDate } from '@/lib/date'
+import { getCurrentDateInInstitutionTz, INSTITUTION_TIMEZONE } from '@/lib/institution-timezone'
 
 interface HourLogFormProps {
   placementId: number
@@ -21,11 +23,7 @@ interface FormErrors {
 
 // Fecha de hoy en formato YYYY-MM-DD, tal como la espera un <input type="date">.
 function todayAsInputValue(): string {
-  const now = new Date()
-  const year = now.getFullYear()
-  const month = String(now.getMonth() + 1).padStart(2, '0')
-  const day = String(now.getDate()).padStart(2, '0')
-  return `${year}-${month}-${day}`
+  return getCurrentDateInInstitutionTz(INSTITUTION_TIMEZONE)
 }
 
 // Convierte la fecha elegida (YYYY-MM-DD) a una etiqueta legible en español
@@ -128,11 +126,22 @@ export function HourLogForm({ placementId, onSaved }: HourLogFormProps) {
     setErrors({})
   }
 
-  function buildErrors(): FormErrors {
+  async function buildErrors(): Promise<FormErrors> {
     const nextErrors: FormErrors = {}
 
     if (!date) {
       nextErrors.date = 'La fecha es obligatoria'
+    } else {
+      const placement = await db.placements.get(placementId)
+      const dateMessage = placement
+        ? validateHourLogCalendarDate(
+            date,
+            placement.startDate,
+            placement.endDate,
+            getCurrentDateInInstitutionTz(INSTITUTION_TIMEZONE),
+          )
+        : 'No se pudo validar el período de la práctica en este dispositivo'
+      if (dateMessage) nextErrors.date = dateMessage
     }
     if (!startTime) {
       nextErrors.startTime = 'La hora de inicio es obligatoria'
@@ -155,40 +164,37 @@ export function HourLogForm({ placementId, onSaved }: HourLogFormProps) {
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
     setSubmitError(null)
-
-    const nextErrors = buildErrors()
-    setErrors(nextErrors)
-    if (Object.keys(nextErrors).length > 0) {
-      return
-    }
-
     setSubmitting(true)
 
-    // Id local temporal: negativo para no chocar jamás con un id real del
-    // servidor (que siempre es positivo). Cuando el servidor confirme el
-    // registro, applyResults lo reemplaza; hasta entonces vive solo aquí,
-    // en este dispositivo, y la UI nunca lo muestra tal cual.
-    const localId = -Date.now()
-    const nowIso = new Date().toISOString()
-    const hoursValue = Number(hours)
-    const trimmedActivity = activity.trim()
-
-    const row: LocalHourLog = {
-      id: localId,
-      placementId,
-      date,
-      startTime,
-      endTime,
-      hours: hoursValue,
-      activity: trimmedActivity,
-      status: 'SUBMITTED',
-      reviewNote: null,
-      version: 1,
-      updatedAt: nowIso,
-      syncState: 'local',
-    }
-
     try {
+      const nextErrors = await buildErrors()
+      setErrors(nextErrors)
+      if (Object.keys(nextErrors).length > 0) return
+
+      // Id local temporal: negativo para no chocar jamás con un id real del
+      // servidor (que siempre es positivo). Cuando el servidor confirme el
+      // registro, applyResults lo reemplaza; hasta entonces vive solo aquí,
+      // en este dispositivo, y la UI nunca lo muestra tal cual.
+      const localId = -Date.now()
+      const nowIso = new Date().toISOString()
+      const hoursValue = Number(hours)
+      const trimmedActivity = activity.trim()
+
+      const row: LocalHourLog = {
+        id: localId,
+        placementId,
+        date,
+        startTime,
+        endTime,
+        hours: hoursValue,
+        activity: trimmedActivity,
+        status: 'SUBMITTED',
+        reviewNote: null,
+        version: 1,
+        updatedAt: nowIso,
+        syncState: 'local',
+      }
+
       // Misma transacción para las dos escrituras: si enqueue() falla, la
       // fila no queda huérfana en 'local' sin que el usuario se entere.
       await db.transaction('rw', [db.hourLogs, db.outbox], async () => {
@@ -234,6 +240,7 @@ export function HourLogForm({ placementId, onSaved }: HourLogFormProps) {
         <Input
           id="hourlog-date"
           type="date"
+          max={todayAsInputValue()}
           value={date}
           onChange={(event) => setDate(event.target.value)}
           aria-invalid={Boolean(errors.date)}
