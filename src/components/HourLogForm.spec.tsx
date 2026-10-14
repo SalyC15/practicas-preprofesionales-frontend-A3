@@ -76,7 +76,8 @@ afterEach(() => {
 describe('HourLogForm calendar dates', () => {
   it('defaults and caps the date at institution today, then stores the exact day in Dexie and outbox', async () => {
     vi.setSystemTime(INSTITUTION_MIDNIGHT_EDGE)
-    render(<HourLogForm placementId={1} />)
+    const onSaved = vi.fn()
+    render(<HourLogForm placementId={1} onSaved={onSaved} />)
 
     const dateInput = screen.getByLabelText('Fecha') as HTMLInputElement
     expect(dateInput.value).toBe('2026-10-13')
@@ -90,6 +91,18 @@ describe('HourLogForm calendar dates', () => {
     const [entry] = await db.outbox.toArray()
     expect(row.date).toBe('2026-10-13')
     expect(entry.payload.date).toBe('2026-10-13')
+    expect(onSaved).toHaveBeenCalledOnce()
+  })
+
+  it('requires a selected date before making any local writes', async () => {
+    render(<HourLogForm placementId={1} />)
+    fillForm('2026-10-13')
+    fireEvent.change(screen.getByLabelText('Fecha'), { target: { value: '' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Guardar horas' }))
+
+    expect(await screen.findByText('La fecha es obligatoria')).toBeInTheDocument()
+    expect(await db.hourLogs.count()).toBe(0)
+    expect(await db.outbox.count()).toBe(0)
   })
 
   it('keeps required-field validation before making any local writes', async () => {
