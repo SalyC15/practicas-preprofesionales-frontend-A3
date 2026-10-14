@@ -16,7 +16,7 @@ import {
 } from '@/components/ui/dialog'
 import { Ledger, LedgerHeaderRow } from '@/components/ledger/Ledger'
 import { LedgerRow } from '@/components/ledger/LedgerRow'
-import { parseLocalDate } from '@/lib/date'
+import { parseStoredCalendarDateUtc } from '@/lib/date'
 import { type HoursSummary, summarizeHours } from '@/lib/hours'
 import { plural } from '@/lib/utils'
 import type { LocalHourLog } from '@/offline/db'
@@ -24,9 +24,14 @@ import { useHourLogs } from '@/offline/hooks/useHourLogs'
 import { usePlacement } from '@/offline/hooks/usePlacement'
 
 function formatDate(dateValue: string): string {
-  const parsed = parseLocalDate(dateValue)
+  const parsed = parseStoredCalendarDateUtc(dateValue)
   if (Number.isNaN(parsed.getTime())) return dateValue
-  return new Intl.DateTimeFormat('es-EC', { day: '2-digit', month: 'short', year: 'numeric' }).format(parsed)
+  return new Intl.DateTimeFormat('es-EC', {
+    timeZone: 'UTC',
+    day: '2-digit',
+    month: 'short',
+    year: 'numeric',
+  }).format(parsed)
 }
 
 function LedgerColumnHeader() {
@@ -68,7 +73,14 @@ function HourLogsList({ logs }: { logs: LocalHourLog[] }) {
               {log.startTime}–{log.endTime}
             </span>
             <span className="font-data text-14 text-ink sm:w-14">{log.hours}</span>
-            <span className="flex-1 text-14 text-inkBody">{log.activity}</span>
+            <span className="flex flex-1 flex-col text-14 text-inkBody">
+              <span>{log.activity}</span>
+              {log.syncState === 'failed' && log.reviewNote ? (
+                <span role="note" className="mt-1 text-12 text-void">
+                  Motivo de rechazo: {log.reviewNote}
+                </span>
+              ) : null}
+            </span>
             <span className="sm:w-32 sm:text-right">
               <StatusBadge status={log.status} />
             </span>
