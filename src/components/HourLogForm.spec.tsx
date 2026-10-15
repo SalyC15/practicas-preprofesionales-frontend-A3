@@ -118,10 +118,13 @@ describe('HourLogForm calendar dates', () => {
   })
 
   it.each([
-    ['zero hours', '0', '08:00', '12:00', 'Las horas deben ser mayores a 0'],
-    ['hours above the existing cap', '9', '08:00', '12:00', 'No puedes registrar más de 8 horas en un mismo día'],
-    ['a non-increasing time range', '4', '13:00', '12:00', 'La hora de fin debe ser posterior a la de inicio'],
-  ])('preserves the existing hours validation for %s', async (_scenario, hours, startTime, endTime, message) => {
+    ['zero hours', '0', '08:00', '12:00', 'las horas deben estar entre 0.5 y 10'],
+    ['hours below minimum boundary', '0.4', '08:00', '12:00', 'las horas deben estar entre 0.5 y 10'],
+    ['hours above maximum boundary', '10.5', '08:00', '19:00', 'las horas deben estar entre 0.5 y 10'],
+    ['hours above the cap', '11', '08:00', '19:00', 'las horas deben estar entre 0.5 y 10'],
+    ['a non-increasing time range', '4', '13:00', '12:00', 'la hora de inicio debe ser anterior a la de fin'],
+    ['same start and end time', '4', '10:00', '10:00', 'la hora de inicio debe ser anterior a la de fin'],
+  ])('validates hour log input and displays unified message for %s', async (_scenario, hours, startTime, endTime, message) => {
     render(<HourLogForm placementId={1} />)
     fillForm('2026-10-13')
     fireEvent.change(screen.getByLabelText('Horas'), { target: { value: hours } })
@@ -134,6 +137,20 @@ describe('HourLogForm calendar dates', () => {
     expect(await db.hourLogs.count()).toBe(0)
     expect(await db.outbox.count()).toBe(0)
   })
+
+  it.each(['0.5', '9', '10'])(
+    'accepts valid hour values including boundaries and previously capped values (%s h)',
+    async (hours) => {
+      render(<HourLogForm placementId={1} />)
+      fillForm('2026-10-13')
+      fireEvent.change(screen.getByLabelText('Horas'), { target: { value: hours } })
+      fireEvent.click(screen.getByRole('button', { name: 'Guardar horas' }))
+
+      await waitFor(async () => expect(await db.hourLogs.count()).toBe(1))
+      const [row] = await db.hourLogs.toArray()
+      expect(row.hours).toBe(Number(hours))
+    },
+  )
 
   it('fails closed when the placement is unavailable locally', async () => {
     await db.placements.delete(1)

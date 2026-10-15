@@ -5,18 +5,25 @@ Lo que sabemos que está mal y no alcanzamos a arreglar antes de entregar esto.
 Si encuentras algo que no está acá, agrégalo. Casi seguro hay más. No tuvimos tiempo de
 auditar todo el repo, solo de anotar lo que nos mordió mientras construíamos.
 
-## D-06 · La validación de horas está en tres lados
+## D-06 · [RESUELTO] La validación de horas estaba en tres lados
 
-`src/components/HourLogForm.tsx` (este repo), más `src/hour-log/dto/create-hour-log.dto.ts`
-y `src/hour-log/hour-log.service.ts` en el backend.
+Resuelto en frontend (`src/lib/hour-log-validation.ts`) y backend (`src/hour-log/hour-log.validation.ts`).
 
-Y encima, en el frontend está duplicada dos veces sobre sí misma: `validateHoursOnSubmit` y
-`validateHoursLive` son la misma regla copiada a mano, una para cuando se envía el
-formulario y otra para el aviso que aparece mientras el estudiante todavía está escribiendo.
-Acá el tope es 8 horas. El DTO del backend permite hasta 12. El servicio del backend corta
-en 10. Tres números para la misma regla de negocio y ninguno coincide con los otros dos.
-Nadie recuerda cuál es el correcto. Probablemente ninguno. Hay que preguntarle a alguien de
-la unidad de vinculación cuántas horas se pueden registrar por día antes de tocar esto.
+Historial de copias y divergencia previa:
+1. `src/hour-log/dto/create-hour-log.dto.ts` (backend): `@Min(0.5) @Max(12)` (límite de 12 horas).
+2. `src/hour-log/hour-log.service.ts` (backend): `dto.hours <= 0 || dto.hours > 10` (límite de 10 horas).
+3. `src/components/HourLogForm.tsx` (frontend): `validateHours` (antes duplicada como `validateHoursOnSubmit` y `validateHoursLive`), cortaba en 8 horas (`hoursValue > 8`).
+
+Estado actual:
+- Se unificó la regla a un solo lugar por repositorio (`src/lib/hour-log-validation.ts` en frontend).
+- Ambos repositorios coinciden en los valores: mínimo 0.5 h, máximo 10 h, formato HH:mm (`^([01]\d|2[0-3]):[0-5]\d$`).
+- Los límites son configurables (`VITE_MIN_HOUR_LOG_HOURS`, `VITE_MAX_HOUR_LOG_HOURS`, `resolveHourLogBounds`).
+- Los mensajes de error quedaron unificados idénticos al backend:
+  - "las horas deben estar entre 0.5 y 10"
+  - "la hora de inicio debe ser anterior a la de fin"
+  - "las horas deben tener el formato HH:mm"
+- Duplicación interna eliminada.
+
 
 ## D-08 · El indicador de sync miente por una ventana corta
 

@@ -7,6 +7,7 @@ import { db, type LocalHourLog } from '@/offline/db'
 import { enqueue } from '@/offline/sync/push'
 import { validateHourLogCalendarDate } from '@/lib/date'
 import { getCurrentDateInInstitutionTz, INSTITUTION_TIMEZONE } from '@/lib/institution-timezone'
+import { getHourLogValidationErrorMessage } from '@/lib/hour-log-validation'
 
 interface HourLogFormProps {
   placementId: number
@@ -63,27 +64,6 @@ function computeDurationLabel(startTime: string, endTime: string): string | null
   return `Duración calculada: ${diffHours.toFixed(1)} h`
 }
 
-// D-06 (copia 3): límite de horas por registro. El DTO del backend acepta
-// hasta 12 horas y su propio servicio corta en 10; aquí, en el formulario,
-// el tope es 8. Los tres umbrales divergen a propósito y no se unifican entre
-// capas; esta función se comparte únicamente entre el aviso en vivo y submit.
-function validateHours(hours: string, startTime: string, endTime: string): string | null {
-  const hoursValue = Number(hours)
-  if (!hours || Number.isNaN(hoursValue)) {
-    return 'Ingresa un número de horas válido'
-  }
-  if (hoursValue <= 0) {
-    return 'Las horas deben ser mayores a 0'
-  }
-  if (hoursValue > 8) {
-    return 'No puedes registrar más de 8 horas en un mismo día'
-  }
-  if (startTime && endTime && endTime <= startTime) {
-    return 'La hora de fin debe ser posterior a la de inicio'
-  }
-  return null
-}
-
 async function validateDateForPlacement(placementId: number, date: string): Promise<string | null> {
   if (!date) return 'La fecha es obligatoria'
 
@@ -120,7 +100,7 @@ async function buildFormErrors(
     nextErrors.activity = 'Describe la actividad realizada'
   }
 
-  const hoursMessage = validateHours(hours, startTime, endTime)
+  const hoursMessage = getHourLogValidationErrorMessage(hours, startTime, endTime)
   if (hoursMessage) {
     nextErrors.hours = hoursMessage
   }
@@ -249,7 +229,7 @@ export function HourLogForm({ placementId, onSaved }: HourLogFormProps) {
 
   const confirmationLabel = formatDateForConfirmation(date)
   const durationLabel = computeDurationLabel(startTime, endTime)
-  const liveHoursWarning = hours ? validateHours(hours, startTime, endTime) : null
+  const liveHoursWarning = hours ? getHourLogValidationErrorMessage(hours, startTime, endTime) : null
 
   function resetForm() {
     setDate(todayAsInputValue())
