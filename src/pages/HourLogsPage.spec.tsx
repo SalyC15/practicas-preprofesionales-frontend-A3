@@ -66,6 +66,6 @@ describe('HourLogsPage calendar dates', () => {
     render(<HourLogsPage />)
 
     expect(screen.getByText(`Motivo de rechazo: ${reason}`)).toBeInTheDocument()
-    expect(screen.getByText('SUBMITTED')).toBeInTheDocument()
+    expect(screen.getByText('ENVIADO')).toBeInTheDocument()
   })
 })

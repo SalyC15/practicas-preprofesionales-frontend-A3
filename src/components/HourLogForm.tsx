@@ -7,7 +7,7 @@ import { db, type LocalHourLog } from '@/offline/db'
 import { enqueue } from '@/offline/sync/push'
 import { validateHourLogCalendarDate } from '@/lib/date'
 import { getCurrentDateInInstitutionTz, INSTITUTION_TIMEZONE } from '@/lib/institution-timezone'
-import { getHourLogValidationErrorMessage } from '@/lib/hour-log-validation'
+import { calculateHoursFromTimes, getHourLogValidationErrorMessage } from '@/lib/hour-log-validation'
 
 interface HourLogFormProps {
   placementId: number
@@ -78,6 +78,41 @@ async function validateDateForPlacement(placementId: number, date: string): Prom
     : 'No se pudo validar el período de la práctica en este dispositivo'
 }
 
+async function checkDuplicateHourLog(
+  placementId: number,
+  date: string,
+  startTime: string,
+  endTime: string,
+  activity: string,
+): Promise<{ field: 'activity' | 'startTime'; message: string } | null> {
+  if (!date || !startTime || !endTime) return null
+  const normalizedActivity = activity.trim().toLowerCase()
+
+  const existingLogs = await db.hourLogs
+    .where('placementId')
+    .equals(placementId)
+    .toArray()
+
+  for (const log of existingLogs) {
+    if (log.status === 'REJECTED') continue
+
+    if (log.date === date && log.startTime === startTime && log.endTime === endTime) {
+      if (log.activity.trim().toLowerCase() === normalizedActivity) {
+        return {
+          field: 'activity',
+          message: 'Ya existe un registro con la misma fecha, horario y actividad.',
+        }
+      }
+      return {
+        field: 'startTime',
+        message: `Ya tienes horas registradas en este mismo horario (${startTime}–${endTime}).`,
+      }
+    }
+  }
+
+  return null
+}
+
 async function buildFormErrors(
   placementId: number,
   date: string,
@@ -103,6 +138,14 @@ async function buildFormErrors(
   const hoursMessage = getHourLogValidationErrorMessage(hours, startTime, endTime)
   if (hoursMessage) {
     nextErrors.hours = hoursMessage
+  }
+
+  // Comprobar que no sea un registro duplicado si no hay errores básicos
+  if (!nextErrors.date && !nextErrors.startTime && !nextErrors.endTime && !nextErrors.hours && !nextErrors.activity) {
+    const duplicate = await checkDuplicateHourLog(placementId, date, startTime, endTime, activity)
+    if (duplicate) {
+      nextErrors[duplicate.field] = duplicate.message
+    }
   }
 
   return nextErrors
@@ -153,7 +196,12 @@ async function submitHourLog(
       values.activity,
     )
     actions.setErrors(nextErrors)
-    if (Object.keys(nextErrors).length > 0) return
+    if (Object.keys(nextErrors).length > 0) {
+      if (nextErrors.activity?.includes('Ya existe') || nextErrors.startTime?.includes('Ya tienes')) {
+        actions.setSubmitError(nextErrors.activity ?? nextErrors.startTime ?? null)
+      }
+      return
+    }
 
     // Id local temporal: negativo para no chocar jamás con un id real del
     // servidor (que siempre es positivo). Cuando el servidor confirme el
@@ -226,6 +274,7 @@ export function HourLogForm({ placementId, onSaved }: HourLogFormProps) {
   const [errors, setErrors] = useState<FormErrors>({})
   const [submitting, setSubmitting] = useState(false)
   const [submitError, setSubmitError] = useState<string | null>(null)
+  const [hoursManuallyEdited, setHoursManuallyEdited] = useState(false)
 
   const confirmationLabel = formatDateForConfirmation(date)
   const durationLabel = computeDurationLabel(startTime, endTime)
@@ -237,7 +286,54 @@ export function HourLogForm({ placementId, onSaved }: HourLogFormProps) {
     setEndTime('')
     setHours('')
     setActivity('')
+    setHoursManuallyEdited(false)
     setErrors({})
+    setSubmitError(null)
+  }
+
+  function handleDateChange(value: string) {
+    setDate(value)
+    if (errors.date) setErrors((prev) => ({ ...prev, date: undefined }))
+    if (submitError) setSubmitError(null)
+  }
+
+  function handleStartTimeChange(value: string) {
+    setStartTime(value)
+    if (errors.startTime) setErrors((prev) => ({ ...prev, startTime: undefined }))
+    if (submitError) setSubmitError(null)
+    if (!hoursManuallyEdited || !hours) {
+      const auto = calculateHoursFromTimes(value, endTime)
+      if (auto) {
+        setHours(auto)
+        if (errors.hours) setErrors((prev) => ({ ...prev, hours: undefined }))
+      }
+    }
+  }
+
+  function handleEndTimeChange(value: string) {
+    setEndTime(value)
+    if (errors.endTime) setErrors((prev) => ({ ...prev, endTime: undefined }))
+    if (submitError) setSubmitError(null)
+    if (!hoursManuallyEdited || !hours) {
+      const auto = calculateHoursFromTimes(startTime, value)
+      if (auto) {
+        setHours(auto)
+        if (errors.hours) setErrors((prev) => ({ ...prev, hours: undefined }))
+      }
+    }
+  }
+
+  function handleHoursChange(value: string) {
+    setHours(value)
+    setHoursManuallyEdited(value.trim() !== '')
+    if (errors.hours) setErrors((prev) => ({ ...prev, hours: undefined }))
+    if (submitError) setSubmitError(null)
+  }
+
+  function handleActivityChange(value: string) {
+    setActivity(value)
+    if (errors.activity) setErrors((prev) => ({ ...prev, activity: undefined }))
+    if (submitError) setSubmitError(null)
   }
 
   function handleSubmit(event: FormEvent<HTMLFormElement>) {
@@ -257,7 +353,7 @@ export function HourLogForm({ placementId, onSaved }: HourLogFormProps) {
           type="date"
           max={todayAsInputValue()}
           value={date}
-          onChange={(event) => setDate(event.target.value)}
+          onChange={(event) => handleDateChange(event.target.value)}
           aria-invalid={Boolean(errors.date)}
           aria-describedby={errors.date ? 'hourlog-date-error' : undefined}
           className="font-data"
@@ -275,7 +371,7 @@ export function HourLogForm({ placementId, onSaved }: HourLogFormProps) {
             id="hourlog-start"
             type="time"
             value={startTime}
-            onChange={(event) => setStartTime(event.target.value)}
+            onChange={(event) => handleStartTimeChange(event.target.value)}
             aria-invalid={Boolean(errors.startTime)}
             aria-describedby={errors.startTime ? 'hourlog-start-error' : undefined}
             className="font-data"
@@ -289,7 +385,7 @@ export function HourLogForm({ placementId, onSaved }: HourLogFormProps) {
             id="hourlog-end"
             type="time"
             value={endTime}
-            onChange={(event) => setEndTime(event.target.value)}
+            onChange={(event) => handleEndTimeChange(event.target.value)}
             aria-invalid={Boolean(errors.endTime)}
             aria-describedby={errors.endTime ? 'hourlog-end-error' : undefined}
             className="font-data"
@@ -310,7 +406,7 @@ export function HourLogForm({ placementId, onSaved }: HourLogFormProps) {
           inputMode="decimal"
           step="0.5"
           value={hours}
-          onChange={(event) => setHours(event.target.value)}
+          onChange={(event) => handleHoursChange(event.target.value)}
           aria-invalid={Boolean(errors.hours)}
           aria-describedby={errors.hours ? 'hourlog-hours-error' : undefined}
           className="font-data tabular-nums"
@@ -326,7 +422,7 @@ export function HourLogForm({ placementId, onSaved }: HourLogFormProps) {
         <Textarea
           id="hourlog-activity"
           value={activity}
-          onChange={(event) => setActivity(event.target.value)}
+          onChange={(event) => handleActivityChange(event.target.value)}
           aria-invalid={Boolean(errors.activity)}
           aria-describedby={errors.activity ? 'hourlog-activity-error' : undefined}
           rows={3}
@@ -336,9 +432,9 @@ export function HourLogForm({ placementId, onSaved }: HourLogFormProps) {
       </div>
 
       {submitError ? (
-        <p role="alert" className="text-14 text-void">
+        <div role="alert" className="rounded-lg border border-void/30 bg-chipVoid/80 px-3.5 py-2.5 text-13 font-medium text-void">
           {submitError}
-        </p>
+        </div>
       ) : null}
 
       <p className="text-12 text-inkSoft">

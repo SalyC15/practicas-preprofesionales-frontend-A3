@@ -203,4 +203,115 @@ describe('HourLogForm calendar dates', () => {
     expect(row.date).toBe(date)
     expect(entry.payload.date).toBe(date)
   })
+
+  it('calculates hours automatically when start and end times are entered', async () => {
+    render(<HourLogForm placementId={1} />)
+    const hoursInput = screen.getByLabelText('Horas') as HTMLInputElement
+
+    fireEvent.change(screen.getByLabelText('Hora de inicio'), { target: { value: '09:00' } })
+    fireEvent.change(screen.getByLabelText('Hora de fin'), { target: { value: '11:30' } })
+    expect(hoursInput.value).toBe('2.5')
+
+    fireEvent.change(screen.getByLabelText('Hora de inicio'), { target: { value: '08:30' } })
+    expect(hoursInput.value).toBe('3')
+  })
+
+  it('preserves manually entered hours when times change, but resumes auto-calculation if cleared', async () => {
+    render(<HourLogForm placementId={1} />)
+    const hoursInput = screen.getByLabelText('Horas') as HTMLInputElement
+
+    fireEvent.change(screen.getByLabelText('Hora de inicio'), { target: { value: '08:00' } })
+    fireEvent.change(screen.getByLabelText('Hora de fin'), { target: { value: '12:00' } })
+    expect(hoursInput.value).toBe('4')
+
+    // El usuario edita manualmente las horas
+    fireEvent.change(hoursInput, { target: { value: '3.5' } })
+    expect(hoursInput.value).toBe('3.5')
+
+    // Cambiar el horario no debe pisar la edición manual
+    fireEvent.change(screen.getByLabelText('Hora de fin'), { target: { value: '13:00' } })
+    expect(hoursInput.value).toBe('3.5')
+
+    // Si limpia el campo, el recálculo automático se reactiva
+    fireEvent.change(hoursInput, { target: { value: '' } })
+    fireEvent.change(screen.getByLabelText('Hora de fin'), { target: { value: '14:00' } })
+    expect(hoursInput.value).toBe('6')
+  })
+
+  it('prevents saving duplicate hour logs with the same date, times, and activity', async () => {
+    await db.hourLogs.put({
+      id: 99,
+      placementId: 1,
+      date: '2026-10-13',
+      startTime: '08:00',
+      endTime: '12:00',
+      hours: 4,
+      activity: 'Apoyo en laboratorio',
+      status: 'SUBMITTED',
+      reviewNote: null,
+      version: 1,
+      updatedAt: '2026-10-13T12:00:00.000Z',
+      syncState: 'local',
+    })
+
+    render(<HourLogForm placementId={1} />)
+    fillForm('2026-10-13')
+    fireEvent.click(screen.getByRole('button', { name: 'Guardar horas' }))
+
+    const alerts = await screen.findAllByText('Ya existe un registro con la misma fecha, horario y actividad.')
+    expect(alerts.length).toBeGreaterThanOrEqual(1)
+    expect(await db.hourLogs.count()).toBe(1)
+    expect(await db.outbox.count()).toBe(0)
+  })
+
+  it('prevents saving overlapping hour logs with identical time slot even with different activity', async () => {
+    await db.hourLogs.put({
+      id: 99,
+      placementId: 1,
+      date: '2026-10-13',
+      startTime: '08:00',
+      endTime: '12:00',
+      hours: 4,
+      activity: 'Otra tarea previa',
+      status: 'SUBMITTED',
+      reviewNote: null,
+      version: 1,
+      updatedAt: '2026-10-13T12:00:00.000Z',
+      syncState: 'local',
+    })
+
+    render(<HourLogForm placementId={1} />)
+    fillForm('2026-10-13')
+    fireEvent.click(screen.getByRole('button', { name: 'Guardar horas' }))
+
+    const alerts = await screen.findAllByText('Ya tienes horas registradas en este mismo horario (08:00–12:00).')
+    expect(alerts.length).toBeGreaterThanOrEqual(1)
+    expect(await db.hourLogs.count()).toBe(1)
+    expect(await db.outbox.count()).toBe(0)
+  })
+
+  it('allows saving if the existing hour log for that time slot was REJECTED', async () => {
+    await db.hourLogs.put({
+      id: 99,
+      placementId: 1,
+      date: '2026-10-13',
+      startTime: '08:00',
+      endTime: '12:00',
+      hours: 4,
+      activity: 'Apoyo en laboratorio',
+      status: 'REJECTED',
+      reviewNote: 'Corregir detalles',
+      version: 1,
+      updatedAt: '2026-10-13T12:00:00.000Z',
+      syncState: 'synced',
+    })
+
+    render(<HourLogForm placementId={1} />)
+    fillForm('2026-10-13')
+    fireEvent.click(screen.getByRole('button', { name: 'Guardar horas' }))
+
+    await waitFor(async () => expect(await db.hourLogs.count()).toBe(2))
+    expect(await db.outbox.count()).toBe(1)
+  })
 })
+
