@@ -255,10 +255,18 @@ export function OfferDetailPage() {
           }
         />
       ) : (
-        <Panel className="p-5 text-13 text-inkMid flex items-center justify-between">
-          <span>
-            Estás visualizando esta oferta con rol <strong>{role}</strong>. Las postulaciones son gestionadas directamente por estudiantes.
-          </span>
+        <Panel className="p-5 text-13 text-inkMid flex flex-wrap items-center justify-between gap-4">
+          <div>
+            <p className="font-semibold text-ink text-14">Postulaciones a esta oferta</p>
+            <p className="text-inkSoft">
+              Revisá los estudiantes postulados, decidí sus aplicaciones y asigná tutores académicos para iniciar sus prácticas.
+            </p>
+          </div>
+          <Button asChild>
+            <Link to={`/ofertas/${offer.id}/postulaciones`}>
+              Ver y gestionar postulaciones
+            </Link>
+          </Button>
         </Panel>
       )}
     </>

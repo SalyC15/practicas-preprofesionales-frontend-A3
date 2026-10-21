@@ -101,3 +101,21 @@ export function decideApplication(id: number, status: ApplicationDecision): Prom
     body: JSON.stringify({ status }),
   })
 }
+
+export interface Tutor {
+  id: number
+  fullName: string
+  email: string
+}
+
+export function listTutors(): Promise<Tutor[]> {
+  return api<Tutor[]>('/placements/tutors')
+}
+
+export function createPlacement(applicationId: number, tutorId: number): Promise<{ id: number }> {
+  return api<{ id: number }>('/placements', {
+    method: 'POST',
+    body: JSON.stringify({ applicationId, tutorId }),
+  })
+}
+

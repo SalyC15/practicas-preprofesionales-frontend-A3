@@ -44,7 +44,8 @@ const ROUTES: RouteDef[] = [
   { path: '/practicantes/:id/horas', roles: ['TUTOR'], element: <ReviewHoursPage /> },
   { path: '/practicantes/:id/evaluar', roles: ['TUTOR'], element: <EvaluatePage /> },
   { path: '/ofertas-empresa', roles: ['COMPANY'], element: <CompanyOffersPage /> },
-  { path: '/ofertas-empresa/:id/postulaciones', roles: ['COMPANY'], element: <OfferApplicationsPage /> },
+  { path: '/ofertas-empresa/:id/postulaciones', roles: ['COMPANY', 'COORDINATOR'], element: <OfferApplicationsPage /> },
+  { path: '/ofertas/:id/postulaciones', roles: ['COMPANY', 'COORDINATOR'], element: <OfferApplicationsPage /> },
   { path: '/empresas', roles: ['COORDINATOR'], element: <CompaniesPage /> },
   { path: '/acreditacion', roles: ['COORDINATOR'], element: <AccreditationPage /> },
 ]

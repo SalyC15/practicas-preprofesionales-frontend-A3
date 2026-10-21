@@ -68,14 +68,23 @@ function OffersList({ offers }: { offers: Offer[] }) {
           description={offer.description}
           meta={formatPeriod(offer.periodStart, offer.periodEnd)}
           actions={
-            <Button asChild size="sm" variant={isStudent ? 'default' : 'outline'}>
-              <Link
-                to={`/ofertas/${offer.id}`}
-                className={isStudent ? 'text-white hover:text-white' : undefined}
-              >
-                {isStudent ? 'Ver y postular' : 'Ver detalle'}
-              </Link>
-            </Button>
+            <div className="flex items-center gap-2">
+              <Button asChild size="sm" variant={isStudent ? 'default' : 'outline'}>
+                <Link
+                  to={`/ofertas/${offer.id}`}
+                  className={isStudent ? 'text-white hover:text-white' : undefined}
+                >
+                  {isStudent ? 'Ver y postular' : 'Ver detalle'}
+                </Link>
+              </Button>
+              {role === 'COORDINATOR' ? (
+                <Button asChild size="sm">
+                  <Link to={`/ofertas/${offer.id}/postulaciones`}>
+                    Postulaciones
+                  </Link>
+                </Button>
+              ) : null}
+            </div>
           }
         />
       ))}

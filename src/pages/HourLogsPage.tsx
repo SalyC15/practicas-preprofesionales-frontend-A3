@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useState } from 'react'
 import { HourLogForm } from '@/components/HourLogForm'
 import { HoursProgressPanel } from '@/components/HoursProgressPanel'
 import { PageHeader } from '@/components/PageHeader'
@@ -97,28 +97,35 @@ function NewHourLogDialog({ placementId }: { placementId: number }) {
   const [open, setOpen] = useState(false)
 
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger asChild>
-        <Button type="button" variant="outline">Registrar horas manuales</Button>
-      </DialogTrigger>
-      <DialogContent>
-        <DialogHeader>
-          <DialogTitle>Registrar horas manuales</DialogTitle>
-          <DialogDescription>
-            Usa este formulario para registrar jornadas extraordinarias o ajustes fuera del cronograma de la empresa.
-          </DialogDescription>
-        </DialogHeader>
-        <DialogBody>
-          <HourLogForm placementId={placementId} onSaved={() => setOpen(false)} />
-        </DialogBody>
-      </DialogContent>
-    </Dialog>
+    <>
+      <Button type="button" onClick={() => setOpen(true)}>
+        Registrar horas
+      </Button>
+      <Dialog open={open} onOpenChange={setOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Registrar horas</DialogTitle>
+            <DialogDescription>
+              Se guardan en este dispositivo y se sincronizan cuando haya conexión.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogBody>
+            <HourLogForm placementId={placementId} onSaved={() => setOpen(false)} />
+          </DialogBody>
+        </DialogContent>
+      </Dialog>
+    </>
   )
 }
 
 export function HourLogsPage() {
   const placement = usePlacement()
   const logs = useHourLogs(placement?.id ?? -1)
+
+  async function handleConfirmAttendance(session: ScheduledSession) {
+    if (!placement) return
+    await confirmAttendance(placement.id, session)
+  }
 
   if (placement === undefined) {
     return <LoadingState>Cargando tu práctica…</LoadingState>
@@ -140,16 +147,7 @@ export function HourLogsPage() {
   // Totales recalculados en cada render a propósito: con esta pantalla no
   // hace falta más que sumar un arreglo, así que no se envuelve en useMemo.
   const hours = summarizeHours(logs, placement.requiredHours)
-
-  const scheduleSummary = useMemo(() => {
-    if (!placement) return null
-    return generatePlacementSchedule(placement, logs)
-  }, [placement, logs])
-
-  async function handleConfirmAttendance(session: ScheduledSession) {
-    if (!placement) return
-    await confirmAttendance(placement.id, session)
-  }
+  const scheduleSummary = generatePlacementSchedule(placement, logs)
 
   return (
     <div className="flex flex-col gap-6">

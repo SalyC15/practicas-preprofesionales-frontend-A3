@@ -40,15 +40,17 @@ const QUICK_ROLES: QuickRole[] = [
   {
     label: 'Estudiante',
     roleName: 'STUDENT',
-    email: 'estudiante0@miyura.com',
+    email: 'estudiantenuevo@miyura.com',
     icon: '🎓',
-    badge: 'Registro offline',
+    badge: 'Listo para postular',
   },
 ]
 
 export function LoginPage() {
-  const { login, sessionMessage } = useAuth()
+  const { login, register, sessionMessage } = useAuth()
   const navigate = useNavigate()
+  const [mode, setMode] = useState<'login' | 'register'>('login')
+  const [fullName, setFullName] = useState('')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [error, setError] = useState<string | null>(null)
@@ -68,10 +70,19 @@ export function LoginPage() {
     setError(null)
     setSubmitting(true)
     try {
-      await login(email, password)
+      if (mode === 'register') {
+        if (!fullName.trim()) {
+          setError('Ingresá tu nombre completo')
+          setSubmitting(false)
+          return
+        }
+        await register(fullName.trim(), email.trim(), password)
+      } else {
+        await login(email, password)
+      }
       navigate('/')
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : 'no se pudo iniciar sesión')
+      setError(err instanceof ApiError ? err.message : mode === 'register' ? 'no se pudo registrar la cuenta' : 'no se pudo iniciar sesión')
     } finally {
       setSubmitting(false)
     }
@@ -109,51 +120,55 @@ export function LoginPage() {
         <div className="rounded-3xl border border-line/90 bg-surface/95 p-6 shadow-[0_20px_50px_rgba(14,58,107,0.07)] backdrop-blur-md sm:p-8">
           <div className="border-b border-paperRule pb-4">
             <h1 className="font-display text-22 font-bold tracking-tight text-ink">
-              Entrá a tu cuenta
+              {mode === 'register' ? 'Registrate como estudiante' : 'Entrá a tu cuenta'}
             </h1>
             <p className="mt-0.5 text-13 text-inkMid">
-              Con el correo institucional que te dio la unidad de vinculación.
+              {mode === 'register'
+                ? 'Creá tu cuenta institucional para postular a ofertas y registrar tus horas.'
+                : 'Con el correo institucional que te dio la unidad de vinculación.'}
             </p>
           </div>
 
-          {/* Selector de Acceso Rápido para Pruebas / Demostración */}
-          <div className="mt-5 rounded-2xl bg-paper/60 p-3 border border-line/70">
-            <div className="mb-2 flex items-center justify-between">
-              <span className="text-11 font-semibold uppercase tracking-wider text-inkMute">
-                Acceso rápido por rol (demo)
-              </span>
-              <span className="font-data text-11 text-inkSoft">clave: yura1234</span>
-            </div>
-            <div className="grid grid-cols-2 gap-2">
-              {QUICK_ROLES.map((r) => {
-                const isSelected = selectedRole === r.roleName
-                return (
-                  <button
-                    key={r.roleName}
-                    type="button"
-                    onClick={() => handleSelectRole(r)}
-                    className={`group flex items-center gap-2 rounded-xl p-2 text-left transition-all ${
-                      isSelected
-                        ? 'bg-surface font-semibold text-stamp shadow-sm border border-stamp/30 ring-1 ring-stamp/20'
-                        : 'bg-surface/60 text-inkBody hover:bg-surface hover:text-ink border border-line/50'
-                    }`}
-                  >
-                    <span className="text-16 select-none" aria-hidden="true">
-                      {r.icon}
-                    </span>
-                    <div className="min-w-0 flex-1">
-                      <div className="text-12 leading-tight font-medium group-hover:text-ink">
-                        {r.label}
+          {/* Selector de Acceso Rápido para Pruebas / Demostración (solo en modo login) */}
+          {mode === 'login' && (
+            <div className="mt-5 rounded-2xl bg-paper/60 p-3 border border-line/70">
+              <div className="mb-2 flex items-center justify-between">
+                <span className="text-11 font-semibold uppercase tracking-wider text-inkMute">
+                  Acceso rápido por rol (demo)
+                </span>
+                <span className="font-data text-11 text-inkSoft">clave: yura1234</span>
+              </div>
+              <div className="grid grid-cols-2 gap-2">
+                {QUICK_ROLES.map((r) => {
+                  const isSelected = selectedRole === r.roleName
+                  return (
+                    <button
+                      key={r.roleName}
+                      type="button"
+                      onClick={() => handleSelectRole(r)}
+                      className={`group flex items-center gap-2 rounded-xl p-2 text-left transition-all ${
+                        isSelected
+                          ? 'bg-surface font-semibold text-stamp shadow-sm border border-stamp/30 ring-1 ring-stamp/20'
+                          : 'bg-surface/60 text-inkBody hover:bg-surface hover:text-ink border border-line/50'
+                      }`}
+                    >
+                      <span className="text-16 select-none" aria-hidden="true">
+                        {r.icon}
+                      </span>
+                      <div className="min-w-0 flex-1">
+                        <div className="text-12 leading-tight font-medium group-hover:text-ink">
+                          {r.label}
+                        </div>
+                        <div className="text-10 truncate text-inkMute leading-none mt-0.5">
+                          {r.badge}
+                        </div>
                       </div>
-                      <div className="text-10 truncate text-inkMute leading-none mt-0.5">
-                        {r.badge}
-                      </div>
-                    </div>
-                  </button>
-                )
-              })}
+                    </button>
+                  )
+                })}
+              </div>
             </div>
-          </div>
+          )}
 
           {sessionMessage && (
             <div className="mt-4 flex items-center gap-2.5 rounded-xl border border-void/20 bg-chipVoid/60 px-3.5 py-2.5">
@@ -167,6 +182,24 @@ export function LoginPage() {
           )}
 
           <form className="mt-5 flex flex-col gap-4" onSubmit={handleSubmit} noValidate>
+            {mode === 'register' && (
+              <div className="flex flex-col gap-1.5">
+                <Label htmlFor="fullName" className="text-13 font-semibold text-ink">
+                  Nombre completo
+                </Label>
+                <Input
+                  id="fullName"
+                  name="fullName"
+                  type="text"
+                  placeholder="Ej. Ana Belén Pérez"
+                  required
+                  value={fullName}
+                  onChange={(event) => setFullName(event.target.value)}
+                  className="h-field bg-well/40 border-line hover:border-inkSoft/60 focus:bg-surface transition-colors"
+                />
+              </div>
+            )}
+
             <div className="flex flex-col gap-1.5">
               <Label htmlFor="email" className="text-13 font-semibold text-ink">
                 Correo institucional
@@ -196,7 +229,7 @@ export function LoginPage() {
 
             <div className="flex flex-col gap-1.5">
               <Label htmlFor="password" className="text-13 font-semibold text-ink">
-                Contraseña
+                {mode === 'register' ? 'Contraseña (mínimo 6 caracteres)' : 'Contraseña'}
               </Label>
               <div className="relative flex items-center">
                 <span className="pointer-events-none absolute left-3.5 text-inkMute">
@@ -208,7 +241,7 @@ export function LoginPage() {
                   id="password"
                   name="password"
                   type={showPassword ? 'text' : 'password'}
-                  autoComplete="current-password"
+                  autoComplete={mode === 'register' ? 'new-password' : 'current-password'}
                   placeholder="Tu contraseña"
                   required
                   value={password}
@@ -258,16 +291,49 @@ export function LoginPage() {
                     <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
                     <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
                   </svg>
-                  <span>Entrando…</span>
+                  <span>{mode === 'register' ? 'Registrando…' : 'Entrando…'}</span>
                 </span>
               ) : (
                 <span className="flex items-center justify-center gap-2">
-                  <span>Entrar</span>
+                  <span>{mode === 'register' ? 'Crear cuenta y entrar' : 'Entrar'}</span>
                   <span aria-hidden="true">→</span>
                 </span>
               )}
             </Button>
           </form>
+
+          {/* Selector de modo Login / Registro */}
+          <div className="mt-5 border-t border-line/70 pt-4 text-center text-13 text-inkMid">
+            {mode === 'login' ? (
+              <p>
+                ¿Sos estudiante y todavía no tenés cuenta?{' '}
+                <button
+                  type="button"
+                  onClick={() => {
+                    setMode('register')
+                    setError(null)
+                  }}
+                  className="font-semibold text-stamp hover:underline"
+                >
+                  Registrate acá
+                </button>
+              </p>
+            ) : (
+              <p>
+                ¿Ya tenés una cuenta registrada?{' '}
+                <button
+                  type="button"
+                  onClick={() => {
+                    setMode('login')
+                    setError(null)
+                  }}
+                  className="font-semibold text-stamp hover:underline"
+                >
+                  Iniciá sesión
+                </button>
+              </p>
+            )}
+          </div>
         </div>
 
         {/* Pie de pantalla */}

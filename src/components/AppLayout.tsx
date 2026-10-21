@@ -57,7 +57,7 @@ const NAV_BY_ROLE: Record<Role, NavGroup[]> = {
       title: 'Gestión',
       items: [
         { path: '/empresas', label: 'Empresas' },
-        { path: '/ofertas', label: 'Ofertas institucionales' },
+        { path: '/ofertas', label: 'Ofertas y postulaciones' },
       ],
     },
     {
