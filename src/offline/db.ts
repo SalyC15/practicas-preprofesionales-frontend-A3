@@ -27,6 +27,10 @@ export interface LocalPlacement {
   status: string
   version: number
   updatedAt: string
+  companyName?: string | null
+  tutorName?: string | null
+  studentName?: string | null
+  offerTitle?: string | null
 }
 
 export interface LocalDocument {

@@ -5,9 +5,14 @@ import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { db, type LocalHourLog } from '@/offline/db'
 import { enqueue } from '@/offline/sync/push'
-import { validateHourLogCalendarDate } from '@/lib/date'
+import { getCalendarDatePrefix, validateHourLogCalendarDate } from '@/lib/date'
 import { getCurrentDateInInstitutionTz, INSTITUTION_TIMEZONE } from '@/lib/institution-timezone'
-import { calculateHoursFromTimes, getHourLogValidationErrorMessage } from '@/lib/hour-log-validation'
+import {
+  calculateHoursFromTimes,
+  getHourLogValidationErrorMessage,
+  HourLogValidationError,
+  validateHourLogTimes,
+} from '@/lib/hour-log-validation'
 
 interface HourLogFormProps {
   placementId: number
@@ -96,16 +101,39 @@ async function checkDuplicateHourLog(
   for (const log of existingLogs) {
     if (log.status === 'REJECTED') continue
 
-    if (log.date === date && log.startTime === startTime && log.endTime === endTime) {
-      if (log.activity.trim().toLowerCase() === normalizedActivity) {
+    // Si la fila quedó varada en 'local' con id temporal negativo y no llegó al outbox
+    // (por un fallo previo o cierre abortado), la purgamos para no bloquear al usuario
+    // con falsos duplicados ni dejar registros fantasmas.
+    if (log.syncState === 'local' && log.id < 0) {
+      const outboxEntries = await db.outbox.toArray()
+      const isEnqueued = outboxEntries.some((e) => (e.payload as { id?: number })?.id === log.id)
+      if (!isEnqueued) {
+        await db.hourLogs.delete(log.id).catch(() => {})
+        continue
+      }
+    }
+
+    const logDate = getCalendarDatePrefix(log.date) ?? log.date
+    if (logDate === date) {
+      if (log.startTime === startTime && log.endTime === endTime) {
+        if (log.activity.trim().toLowerCase() === normalizedActivity) {
+          return {
+            field: 'activity',
+            message: 'Ya existe un registro con la misma fecha, horario y actividad.',
+          }
+        }
         return {
-          field: 'activity',
-          message: 'Ya existe un registro con la misma fecha, horario y actividad.',
+          field: 'startTime',
+          message: `Ya tienes horas registradas en este mismo horario (${startTime}–${endTime}).`,
         }
       }
-      return {
-        field: 'startTime',
-        message: `Ya tienes horas registradas en este mismo horario (${startTime}–${endTime}).`,
+
+      // Detecta solapamiento de horario en la misma fecha (ej: 10:00–12:00 vs 11:00–13:00)
+      if (startTime < log.endTime && endTime > log.startTime) {
+        return {
+          field: 'startTime',
+          message: `El horario (${startTime}–${endTime}) se solapa con otro registro existente (${log.startTime}–${log.endTime}).`,
+        }
       }
     }
   }
@@ -135,9 +163,27 @@ async function buildFormErrors(
     nextErrors.activity = 'Describe la actividad realizada'
   }
 
-  const hoursMessage = getHourLogValidationErrorMessage(hours, startTime, endTime)
-  if (hoursMessage) {
-    nextErrors.hours = hoursMessage
+  let hasTimeOrderError = false
+  if (startTime && endTime) {
+    try {
+      validateHourLogTimes({ startTime, endTime })
+    } catch (error) {
+      if (error instanceof HourLogValidationError) {
+        nextErrors.startTime = error.message
+        hasTimeOrderError = true
+      }
+    }
+  }
+
+  if (!hasTimeOrderError) {
+    if (!hours) {
+      nextErrors.hours = 'Ingresa un número de horas válido'
+    } else {
+      const hoursMessage = getHourLogValidationErrorMessage(hours, startTime, endTime)
+      if (hoursMessage) {
+        nextErrors.hours = hoursMessage
+      }
+    }
   }
 
   // Comprobar que no sea un registro duplicado si no hay errores básicos
@@ -197,9 +243,8 @@ async function submitHourLog(
     )
     actions.setErrors(nextErrors)
     if (Object.keys(nextErrors).length > 0) {
-      if (nextErrors.activity?.includes('Ya existe') || nextErrors.startTime?.includes('Ya tienes')) {
-        actions.setSubmitError(nextErrors.activity ?? nextErrors.startTime ?? null)
-      }
+      // Los errores ya se renderizan contextualizados debajo del campo correspondiente.
+      // No duplicamos el mensaje en el banner general de submitError.
       return
     }
 
@@ -227,15 +272,16 @@ async function submitHourLog(
       syncState: 'local',
     }
 
-    // Misma transacción para las dos escrituras: si enqueue() falla, la
-    // fila no queda huérfana en 'local' sin que el usuario se entere.
-    await db.transaction('rw', [db.hourLogs, db.outbox], async () => {
-      // 1) Escribe local primero: esto es lo único que hace falta para que
-      // el registro sobreviva a un refresh sin red — no depende de fetch.
-      await db.hourLogs.add(row)
+    // 1) Escribe local primero:
+    await db.hourLogs.add(row)
 
-      // 2) Encola la operación para cuando haya conexión. enqueue() marca
-      // la fila como 'queued' apenas se agrega a la cola de salida.
+    // 2) Encola la operación para cuando haya conexión.
+    // enqueue() gestiona internamente withSyncLock y su propia transacción
+    // sobre db.outbox y db.hourLogs, actualizando syncState a 'queued'.
+    // NOTA: No envolver enqueue() en un db.transaction() externo porque
+    // navigator.locks dentro de una transacción activa de IndexedDB aborta
+    // la transacción en navegadores reales (PrematureCommitError / TransactionInactiveError).
+    try {
       await enqueue({
         entity: 'hourLog',
         op: 'create',
@@ -254,11 +300,16 @@ async function submitHourLog(
         },
         baseVersion: null,
       })
-    })
+    } catch (enqueueError) {
+      // Si enqueue falla, limpiamos la fila local para no dejar rezagos huérfanos ni falsos duplicados
+      await db.hourLogs.delete(row.id).catch(() => {})
+      throw enqueueError
+    }
 
     actions.resetForm()
     actions.onSaved?.()
-  } catch {
+  } catch (error) {
+    console.error('Error al guardar horas en el dispositivo:', error)
     actions.setSubmitError('No se pudo guardar el registro en este dispositivo. Intenta de nuevo.')
   } finally {
     actions.setSubmitting(false)
@@ -274,11 +325,22 @@ export function HourLogForm({ placementId, onSaved }: HourLogFormProps) {
   const [errors, setErrors] = useState<FormErrors>({})
   const [submitting, setSubmitting] = useState(false)
   const [submitError, setSubmitError] = useState<string | null>(null)
-  const [hoursManuallyEdited, setHoursManuallyEdited] = useState(false)
 
   const confirmationLabel = formatDateForConfirmation(date)
   const durationLabel = computeDurationLabel(startTime, endTime)
-  const liveHoursWarning = hours ? getHourLogValidationErrorMessage(hours, startTime, endTime) : null
+  let liveHoursWarning: string | null = null
+  if (startTime && endTime) {
+    try {
+      validateHourLogTimes({ startTime, endTime })
+      if (hours) {
+        liveHoursWarning = getHourLogValidationErrorMessage(hours, startTime, endTime)
+      }
+    } catch (error) {
+      if (error instanceof HourLogValidationError) {
+        liveHoursWarning = error.message
+      }
+    }
+  }
 
   function resetForm() {
     setDate(todayAsInputValue())
@@ -286,7 +348,6 @@ export function HourLogForm({ placementId, onSaved }: HourLogFormProps) {
     setEndTime('')
     setHours('')
     setActivity('')
-    setHoursManuallyEdited(false)
     setErrors({})
     setSubmitError(null)
   }
@@ -301,33 +362,18 @@ export function HourLogForm({ placementId, onSaved }: HourLogFormProps) {
     setStartTime(value)
     if (errors.startTime) setErrors((prev) => ({ ...prev, startTime: undefined }))
     if (submitError) setSubmitError(null)
-    if (!hoursManuallyEdited || !hours) {
-      const auto = calculateHoursFromTimes(value, endTime)
-      if (auto) {
-        setHours(auto)
-        if (errors.hours) setErrors((prev) => ({ ...prev, hours: undefined }))
-      }
-    }
+    const auto = calculateHoursFromTimes(value, endTime)
+    setHours(auto ?? '')
+    if (auto && errors.hours) setErrors((prev) => ({ ...prev, hours: undefined }))
   }
 
   function handleEndTimeChange(value: string) {
     setEndTime(value)
     if (errors.endTime) setErrors((prev) => ({ ...prev, endTime: undefined }))
     if (submitError) setSubmitError(null)
-    if (!hoursManuallyEdited || !hours) {
-      const auto = calculateHoursFromTimes(startTime, value)
-      if (auto) {
-        setHours(auto)
-        if (errors.hours) setErrors((prev) => ({ ...prev, hours: undefined }))
-      }
-    }
-  }
-
-  function handleHoursChange(value: string) {
-    setHours(value)
-    setHoursManuallyEdited(value.trim() !== '')
-    if (errors.hours) setErrors((prev) => ({ ...prev, hours: undefined }))
-    if (submitError) setSubmitError(null)
+    const auto = calculateHoursFromTimes(startTime, value)
+    setHours(auto ?? '')
+    if (auto && errors.hours) setErrors((prev) => ({ ...prev, hours: undefined }))
   }
 
   function handleActivityChange(value: string) {
@@ -403,15 +449,18 @@ export function HourLogForm({ placementId, onSaved }: HourLogFormProps) {
         <Input
           id="hourlog-hours"
           type="number"
-          inputMode="decimal"
-          step="0.5"
+          readOnly
           value={hours}
-          onChange={(event) => handleHoursChange(event.target.value)}
+          placeholder="Calculado automáticamente"
+          aria-readonly="true"
           aria-invalid={Boolean(errors.hours)}
-          aria-describedby={errors.hours ? 'hourlog-hours-error' : undefined}
-          className="font-data tabular-nums"
+          aria-describedby={errors.hours ? 'hourlog-hours-error' : 'hourlog-hours-hint'}
+          className="font-data tabular-nums bg-soft/50 text-ink cursor-not-allowed select-none"
         />
-        {liveHoursWarning && !errors.hours ? (
+        <p id="hourlog-hours-hint" className="text-12 text-inkSoft">
+          Calculado automáticamente según la hora de inicio y fin.
+        </p>
+        {liveHoursWarning && !errors.hours && !errors.startTime ? (
           <p className="text-12 text-pending">{liveHoursWarning}</p>
         ) : null}
         {renderFieldError(errors.hours, 'hourlog-hours-error')}

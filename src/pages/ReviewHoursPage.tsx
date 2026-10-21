@@ -300,7 +300,7 @@ export function ReviewHoursPage() {
     <>
       <PageHeader
         title="Horas del practicante"
-        subtitle={`Estudiante #${placement.studentId} · Empresa #${placement.companyId}`}
+        subtitle={`${placement.studentName ?? `Estudiante #${placement.studentId}`} · ${placement.companyName ?? `Empresa #${placement.companyId}`}${placement.offerTitle ? ` (${placement.offerTitle})` : ''}`}
         actions={
           <>
             <Button asChild variant="outline">

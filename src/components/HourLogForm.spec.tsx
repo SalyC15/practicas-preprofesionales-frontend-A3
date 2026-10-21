@@ -24,7 +24,6 @@ function fillForm(date: string) {
   fireEvent.change(screen.getByLabelText('Fecha'), { target: { value: date } })
   fireEvent.change(screen.getByLabelText('Hora de inicio'), { target: { value: '08:00' } })
   fireEvent.change(screen.getByLabelText('Hora de fin'), { target: { value: '12:00' } })
-  fireEvent.change(screen.getByLabelText('Horas'), { target: { value: '4' } })
   fireEvent.change(screen.getByLabelText('Actividad'), { target: { value: 'Apoyo en laboratorio' } })
 }
 
@@ -118,16 +117,13 @@ describe('HourLogForm calendar dates', () => {
   })
 
   it.each([
-    ['zero hours', '0', '08:00', '12:00', 'las horas deben estar entre 0.5 y 10'],
-    ['hours below minimum boundary', '0.4', '08:00', '12:00', 'las horas deben estar entre 0.5 y 10'],
-    ['hours above maximum boundary', '10.5', '08:00', '19:00', 'las horas deben estar entre 0.5 y 10'],
-    ['hours above the cap', '11', '08:00', '19:00', 'las horas deben estar entre 0.5 y 10'],
-    ['a non-increasing time range', '4', '13:00', '12:00', 'la hora de inicio debe ser anterior a la de fin'],
-    ['same start and end time', '4', '10:00', '10:00', 'la hora de inicio debe ser anterior a la de fin'],
-  ])('validates hour log input and displays unified message for %s', async (_scenario, hours, startTime, endTime, message) => {
+    ['hours below minimum boundary', '08:00', '08:20', 'las horas deben estar entre 0.5 y 10'],
+    ['hours above maximum boundary', '08:00', '19:00', 'las horas deben estar entre 0.5 y 10'],
+    ['a non-increasing time range', '13:00', '12:00', 'la hora de inicio debe ser anterior a la de fin'],
+    ['same start and end time', '10:00', '10:00', 'la hora de inicio debe ser anterior a la de fin'],
+  ])('validates hour log input and displays unified message for %s', async (_scenario, startTime, endTime, message) => {
     render(<HourLogForm placementId={1} />)
     fillForm('2026-10-13')
-    fireEvent.change(screen.getByLabelText('Horas'), { target: { value: hours } })
     fireEvent.change(screen.getByLabelText('Hora de inicio'), { target: { value: startTime } })
     fireEvent.change(screen.getByLabelText('Hora de fin'), { target: { value: endTime } })
     expect(screen.getByText(message)).toBeInTheDocument()
@@ -138,12 +134,17 @@ describe('HourLogForm calendar dates', () => {
     expect(await db.outbox.count()).toBe(0)
   })
 
-  it.each(['0.5', '9', '10'])(
+  it.each([
+    ['0.5', '08:00', '08:30'],
+    ['9', '08:00', '17:00'],
+    ['10', '08:00', '18:00'],
+  ])(
     'accepts valid hour values including boundaries and previously capped values (%s h)',
-    async (hours) => {
+    async (hours, startTime, endTime) => {
       render(<HourLogForm placementId={1} />)
       fillForm('2026-10-13')
-      fireEvent.change(screen.getByLabelText('Horas'), { target: { value: hours } })
+      fireEvent.change(screen.getByLabelText('Hora de inicio'), { target: { value: startTime } })
+      fireEvent.change(screen.getByLabelText('Hora de fin'), { target: { value: endTime } })
       fireEvent.click(screen.getByRole('button', { name: 'Guardar horas' }))
 
       await waitFor(async () => expect(await db.hourLogs.count()).toBe(1))
@@ -216,26 +217,21 @@ describe('HourLogForm calendar dates', () => {
     expect(hoursInput.value).toBe('3')
   })
 
-  it('preserves manually entered hours when times change, but resumes auto-calculation if cleared', async () => {
+  it('marks the hours field as read-only and calculates hours strictly from start and end times', async () => {
     render(<HourLogForm placementId={1} />)
     const hoursInput = screen.getByLabelText('Horas') as HTMLInputElement
+    expect(hoursInput).toHaveAttribute('readonly')
 
     fireEvent.change(screen.getByLabelText('Hora de inicio'), { target: { value: '08:00' } })
     fireEvent.change(screen.getByLabelText('Hora de fin'), { target: { value: '12:00' } })
     expect(hoursInput.value).toBe('4')
 
-    // El usuario edita manualmente las horas
-    fireEvent.change(hoursInput, { target: { value: '3.5' } })
-    expect(hoursInput.value).toBe('3.5')
+    fireEvent.change(screen.getByLabelText('Hora de fin'), { target: { value: '13:30' } })
+    expect(hoursInput.value).toBe('5.5')
 
-    // Cambiar el horario no debe pisar la edición manual
-    fireEvent.change(screen.getByLabelText('Hora de fin'), { target: { value: '13:00' } })
-    expect(hoursInput.value).toBe('3.5')
-
-    // Si limpia el campo, el recálculo automático se reactiva
-    fireEvent.change(hoursInput, { target: { value: '' } })
-    fireEvent.change(screen.getByLabelText('Hora de fin'), { target: { value: '14:00' } })
-    expect(hoursInput.value).toBe('6')
+    // Si el horario es inválido (fin antes de inicio), limpia las horas
+    fireEvent.change(screen.getByLabelText('Hora de fin'), { target: { value: '07:00' } })
+    expect(hoursInput.value).toBe('')
   })
 
   it('prevents saving duplicate hour logs with the same date, times, and activity', async () => {
@@ -313,5 +309,59 @@ describe('HourLogForm calendar dates', () => {
     await waitFor(async () => expect(await db.hourLogs.count()).toBe(2))
     expect(await db.outbox.count()).toBe(1)
   })
+
+  it('detects duplicates even when the existing record has an ISO date string from server sync', async () => {
+    await db.hourLogs.put({
+      id: 99,
+      placementId: 1,
+      date: '2026-10-13T00:00:00.000Z',
+      startTime: '08:00',
+      endTime: '12:00',
+      hours: 4,
+      activity: 'Apoyo en laboratorio',
+      status: 'SUBMITTED',
+      reviewNote: null,
+      version: 1,
+      updatedAt: '2026-10-13T12:00:00.000Z',
+      syncState: 'synced',
+    })
+
+    render(<HourLogForm placementId={1} />)
+    fillForm('2026-10-13')
+    fireEvent.click(screen.getByRole('button', { name: 'Guardar horas' }))
+
+    const alerts = await screen.findAllByText('Ya existe un registro con la misma fecha, horario y actividad.')
+    expect(alerts.length).toBeGreaterThanOrEqual(1)
+    expect(await db.hourLogs.count()).toBe(1)
+  })
+
+  it('prevents saving when the time slot overlaps with an existing registered block', async () => {
+    await db.hourLogs.put({
+      id: 99,
+      placementId: 1,
+      date: '2026-10-13',
+      startTime: '10:00',
+      endTime: '12:00',
+      hours: 2,
+      activity: 'Actividad previa',
+      status: 'SUBMITTED',
+      reviewNote: null,
+      version: 1,
+      updatedAt: '2026-10-13T12:00:00.000Z',
+      syncState: 'synced',
+    })
+
+    render(<HourLogForm placementId={1} />)
+    fireEvent.change(screen.getByLabelText('Fecha'), { target: { value: '2026-10-13' } })
+    fireEvent.change(screen.getByLabelText('Hora de inicio'), { target: { value: '11:00' } })
+    fireEvent.change(screen.getByLabelText('Hora de fin'), { target: { value: '13:00' } })
+    fireEvent.change(screen.getByLabelText('Actividad'), { target: { value: 'Nueva actividad solapada' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Guardar horas' }))
+
+    const alerts = await screen.findAllByText('El horario (11:00–13:00) se solapa con otro registro existente (10:00–12:00).')
+    expect(alerts.length).toBeGreaterThanOrEqual(1)
+    expect(await db.hourLogs.count()).toBe(1)
+  })
 })
+
 

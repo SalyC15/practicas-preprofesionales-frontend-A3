@@ -1,8 +1,9 @@
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import { HourLogForm } from '@/components/HourLogForm'
 import { HoursProgressPanel } from '@/components/HoursProgressPanel'
 import { PageHeader } from '@/components/PageHeader'
 import { EmptyState, LoadingState, Panel } from '@/components/Panel'
+import { ScheduleAttendancePanel } from '@/components/ScheduleAttendancePanel'
 import { StatusBadge } from '@/components/StatusBadge'
 import { Button } from '@/components/ui/button'
 import {
@@ -18,7 +19,9 @@ import { Ledger, LedgerHeaderRow } from '@/components/ledger/Ledger'
 import { LedgerRow } from '@/components/ledger/LedgerRow'
 import { parseStoredCalendarDateUtc } from '@/lib/date'
 import { type HoursSummary, summarizeHours } from '@/lib/hours'
+import { generatePlacementSchedule, type ScheduledSession } from '@/lib/schedule'
 import { plural } from '@/lib/utils'
+import { confirmAttendance } from '@/offline/attendance'
 import type { LocalHourLog } from '@/offline/db'
 import { useHourLogs } from '@/offline/hooks/useHourLogs'
 import { usePlacement } from '@/offline/hooks/usePlacement'
@@ -96,13 +99,13 @@ function NewHourLogDialog({ placementId }: { placementId: number }) {
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
-        <Button type="button">Registrar horas</Button>
+        <Button type="button" variant="outline">Registrar horas manuales</Button>
       </DialogTrigger>
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>Registrar horas</DialogTitle>
+          <DialogTitle>Registrar horas manuales</DialogTitle>
           <DialogDescription>
-            Se guardan en este dispositivo y se sincronizan cuando haya conexión
+            Usa este formulario para registrar jornadas extraordinarias o ajustes fuera del cronograma de la empresa.
           </DialogDescription>
         </DialogHeader>
         <DialogBody>
@@ -138,17 +141,41 @@ export function HourLogsPage() {
   // hace falta más que sumar un arreglo, así que no se envuelve en useMemo.
   const hours = summarizeHours(logs, placement.requiredHours)
 
+  const scheduleSummary = useMemo(() => {
+    if (!placement) return null
+    return generatePlacementSchedule(placement, logs)
+  }, [placement, logs])
+
+  async function handleConfirmAttendance(session: ScheduledSession) {
+    if (!placement) return
+    await confirmAttendance(placement.id, session)
+  }
+
   return (
-    <>
+    <div className="flex flex-col gap-6">
       <PageHeader
-        title="Libro de horas"
-        subtitle="Todo lo que registraste este período. Se guarda en este dispositivo aunque no haya señal."
+        title="Libro de horas y asistencia"
+        subtitle={
+          placement.companyName
+            ? `${placement.offerTitle ? `${placement.offerTitle} · ` : ''}${placement.companyName} · ${placement.requiredHours} h ofertadas`
+            : 'Todo lo que registraste este período. Se guarda en este dispositivo aunque no haya señal.'
+        }
         actions={<NewHourLogDialog placementId={placement.id} />}
       />
 
       <HoursProgressPanel hours={hours} note={submittedNote(hours)} />
 
+      {scheduleSummary ? (
+        <ScheduleAttendancePanel
+          summary={scheduleSummary}
+          companyName={placement.companyName}
+          offerTitle={placement.offerTitle}
+          onConfirmAttendance={handleConfirmAttendance}
+        />
+      ) : null}
+
       <Panel
+        title="Historial de horas registradas"
         toolbar={
           <span className="ml-auto font-data text-12 text-inkSoft">
             {plural(logs.length, 'registro', 'registros')}
@@ -157,6 +184,6 @@ export function HourLogsPage() {
       >
         <HourLogsList logs={logs} />
       </Panel>
-    </>
+    </div>
   )
 }

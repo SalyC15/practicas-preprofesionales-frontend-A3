@@ -294,8 +294,8 @@ export function MyPlacementPage() {
   return (
     <>
       <PageHeader
-        title="Mi práctica"
-        subtitle={`Empresa #${placement.companyId} · ${formatPeriod(placement.startDate, placement.endDate)}`}
+        title={placement.offerTitle ?? 'Mi práctica'}
+        subtitle={`${placement.companyName ?? `Empresa #${placement.companyId}`} · ${formatPeriod(placement.startDate, placement.endDate)}`}
         actions={
           <Button asChild>
             <Link to="/horas">Registrar horas</Link>
@@ -314,8 +314,14 @@ export function MyPlacementPage() {
 
       <Section title="Datos de la práctica">
         <dl className="divide-y divide-paperRule">
-          <DataRow label="Empresa">Empresa #{placement.companyId}</DataRow>
-          <DataRow label="Tutor">Tutor #{placement.tutorId}</DataRow>
+          {placement.offerTitle ? (
+            <DataRow label="Cargo / Práctica">{placement.offerTitle}</DataRow>
+          ) : null}
+          <DataRow label="Empresa">{placement.companyName ?? `Empresa #${placement.companyId}`}</DataRow>
+          <DataRow label="Tutor">{placement.tutorName ?? `Tutor #${placement.tutorId}`}</DataRow>
+          <DataRow label="Horas requeridas">
+            <span className="font-data font-semibold">{placement.requiredHours} h</span>
+          </DataRow>
           <DataRow label="Periodo">
             <span className="font-data">{formatPeriod(placement.startDate, placement.endDate)}</span>
           </DataRow>
