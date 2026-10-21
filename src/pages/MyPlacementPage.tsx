@@ -1,5 +1,6 @@
 import { useLiveQuery } from 'dexie-react-hooks'
 import { Link } from 'react-router-dom'
+import { Chip } from '@/components/Chip'
 import { HeroCard, HeroPanel } from '@/components/HeroPanel'
 import { PageHeader } from '@/components/PageHeader'
 import { EmptyState, LoadingState, Section } from '@/components/Panel'
@@ -15,6 +16,7 @@ import { plural } from '@/lib/utils'
 import { db, type LocalDocument, type LocalHourLog } from '@/offline/db'
 import { useHourLogs } from '@/offline/hooks/useHourLogs'
 import { usePlacement } from '@/offline/hooks/usePlacement'
+import { type DocumentKind, KIND_LABEL, REQUIRED_KINDS, latestStatus } from '@/pages/DocumentsPage'
 
 function formatDate(dateValue: string): string {
   const parsed = parseLocalDate(dateValue)
@@ -66,7 +68,7 @@ function PlacementHero({
           label="Progreso de horas aprobadas"
           onTint
         />
-        <span className="inline-flex h-[26px] flex-none items-center rounded-full bg-surface px-2.5 font-data text-12 font-semibold text-ink">
+        <span className="inline-flex h-[26px] flex-none items-center rounded-full bg-white/15 backdrop-blur-sm border border-white/20 px-2.5 font-data text-12 font-semibold text-white">
           {Math.round(hours.approvedPct)}%
         </span>
       </div>
@@ -77,10 +79,12 @@ function PlacementHero({
 function PlacementStats({
   hours,
   pendingDocuments,
+  missingRequiredCount,
   logCount,
 }: {
   hours: HoursSummary
   pendingDocuments: number
+  missingRequiredCount: number
   logCount: number
 }) {
   return (
@@ -99,7 +103,13 @@ function PlacementStats({
       <StatCard
         label="Documentos pendientes"
         value={String(pendingDocuments)}
-        note="por validar"
+        note={
+          missingRequiredCount > 0
+            ? 'por subir'
+            : pendingDocuments > 0
+              ? 'por validar'
+              : 'al día'
+        }
         noteTone={pendingDocuments > 0 ? 'pending' : 'neutral'}
       />
       <StatCard label="Registros" value={String(logCount)} note="en el libro" />
@@ -122,13 +132,19 @@ function PendingDocuments({ documents }: { documents: LocalDocument[] | undefine
     )
   }
 
-  const pending = documents.filter((doc) => doc.status === 'PENDING')
-  if (pending.length === 0) {
+  const missingRequired = REQUIRED_KINDS.filter((kind) => {
+    const status = latestStatus(documents, kind)
+    return status === null || status === 'REJECTED'
+  })
+
+  const pendingReview = documents.filter((doc) => doc.status === 'PENDING')
+
+  if (missingRequired.length === 0 && pendingReview.length === 0) {
     return (
       <Section title="Documentos pendientes" aside={aside}>
         <EmptyState
           title="No tienes documentos pendientes"
-          description="Todo lo que subiste ya fue revisado."
+          description="Todos tus documentos obligatorios están al día y revisados."
         />
       </Section>
     )
@@ -137,19 +153,63 @@ function PendingDocuments({ documents }: { documents: LocalDocument[] | undefine
   return (
     <Section title="Documentos pendientes" aside={aside}>
       <div className="divide-y divide-paperRule">
-        {pending.map((doc, index) => (
+        {missingRequired.map((kind) => {
+          const status = latestStatus(documents, kind)
+          const isRejected = status === 'REJECTED'
+          return (
+            <div
+              key={kind}
+              className="flex min-h-row items-center justify-between gap-4 px-[18px] py-3 bg-chipVoid/15"
+            >
+              <div className="min-w-0">
+                <div className="flex items-center gap-2">
+                  <span className="text-14 font-semibold text-ink">{KIND_LABEL[kind]}</span>
+                  <span className="rounded bg-chipVoid px-1.5 py-0.5 text-11 font-medium text-void">
+                    Obligatorio
+                  </span>
+                </div>
+                <div className="mt-0.5 text-12 text-inkSoft">
+                  {isRejected
+                    ? 'El documento fue rechazado por el revisor. Debes subir una versión corregida.'
+                    : 'Requerido para activar tu práctica preprofesional.'}
+                </div>
+              </div>
+              <div className="flex items-center gap-3">
+                <Chip tone="void">{isRejected ? 'Rechazado' : 'Falta subir'}</Chip>
+                <Button asChild size="sm" className="hidden sm:inline-flex">
+                  <Link to="/documentos">Subir</Link>
+                </Button>
+              </div>
+            </div>
+          )
+        })}
+
+        {pendingReview.map((doc, index) => (
           <div
-            key={index}
+            key={doc.id ?? index}
             className="flex min-h-row items-center justify-between gap-4 px-[18px] py-2.5"
           >
             <div className="min-w-0">
               <div className="truncate text-14 font-semibold text-ink">{doc.filename}</div>
-              <div className="mt-0.5 text-12 text-inkSoft">{doc.kind}</div>
+              <div className="mt-0.5 text-12 text-inkSoft">
+                {KIND_LABEL[doc.kind as DocumentKind] ?? doc.kind} · En revisión
+              </div>
             </div>
             <StatusBadge status={doc.status} />
           </div>
         ))}
       </div>
+
+      {missingRequired.length > 0 && (
+        <div className="p-4 bg-soft/40 border-t border-paperRule flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+          <p className="text-13 text-inkBody">
+            Para activar y convalidar tu práctica debes subir el convenio y seguro obligatorio.
+          </p>
+          <Button asChild size="sm" className="self-start sm:self-auto shrink-0">
+            <Link to="/documentos">Ir a subir documentos</Link>
+          </Button>
+        </div>
+      )}
     </Section>
   )
 }
@@ -223,7 +283,12 @@ export function MyPlacementPage() {
     )
   }
 
-  const pendingDocuments = documents?.filter((doc) => doc.status === 'PENDING').length ?? 0
+  const missingRequired = REQUIRED_KINDS.filter((kind) => {
+    const status = latestStatus(documents ?? [], kind)
+    return status === null || status === 'REJECTED'
+  })
+  const pendingReview = documents?.filter((doc) => doc.status === 'PENDING') ?? []
+  const pendingDocuments = missingRequired.length + pendingReview.length
   const hours = summarizeHours(logs, placement.requiredHours)
 
   return (
@@ -243,6 +308,7 @@ export function MyPlacementPage() {
       <PlacementStats
         hours={hours}
         pendingDocuments={pendingDocuments}
+        missingRequiredCount={missingRequired.length}
         logCount={logs?.length ?? 0}
       />
 

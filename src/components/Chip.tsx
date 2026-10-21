@@ -8,10 +8,10 @@ import { cn } from '@/lib/utils'
 export type ChipTone = 'stamp' | 'pending' | 'void' | 'neutral'
 
 const TONE_CLASSES: Record<ChipTone, string> = {
-  stamp: 'bg-chipStamp text-stamp',
-  pending: 'bg-chipPending text-pending',
-  void: 'bg-chipVoid text-void',
-  neutral: 'bg-soft text-inkSoft',
+  stamp: 'bg-chipStamp text-stamp border border-stamp/20 shadow-2xs',
+  pending: 'bg-chipPending text-pending border border-pending/20 shadow-2xs',
+  void: 'bg-chipVoid text-void border border-void/20 shadow-2xs',
+  neutral: 'bg-soft text-inkSoft border border-line shadow-2xs',
 }
 
 // El punto lleva su propio color: en los tonos claros el texto no tiene

@@ -2,6 +2,7 @@ import { useEffect } from 'react'
 import { NavLink, Outlet } from 'react-router-dom'
 import { useAuth, type Role } from '@/auth/AuthContext'
 import { Button } from '@/components/ui/button'
+import { BrandLogo } from '@/components/BrandLogo'
 import { SyncIndicator } from '@/components/SyncIndicator'
 import { startSync } from '@/offline/sync/scheduler'
 import { cn } from '@/lib/utils'
@@ -41,9 +42,29 @@ const NAV_BY_ROLE: Record<Role, NavGroup[]> = {
       ],
     },
   ],
-  TUTOR: [{ title: 'Prácticas', items: [{ path: '/practicantes', label: 'Mis practicantes' }] }],
+  TUTOR: [
+    {
+      title: 'Prácticas',
+      items: [
+        { path: '/practicantes', label: 'Mis practicantes' },
+        { path: '/ofertas', label: 'Ofertas' },
+      ],
+    },
+  ],
   COMPANY: [{ title: 'Reclutamiento', items: [{ path: '/ofertas-empresa', label: 'Mis ofertas' }] }],
-  COORDINATOR: [{ title: 'Cierre', items: [{ path: '/acreditacion', label: 'Acreditación' }] }],
+  COORDINATOR: [
+    {
+      title: 'Gestión',
+      items: [
+        { path: '/empresas', label: 'Empresas' },
+        { path: '/ofertas', label: 'Ofertas institucionales' },
+      ],
+    },
+    {
+      title: 'Cierre',
+      items: [{ path: '/acreditacion', label: 'Acreditación' }],
+    },
+  ],
 }
 
 function initialsOf(fullName: string | undefined): string {
@@ -68,19 +89,14 @@ export function AppLayout() {
 
   return (
     <div className="flex min-h-screen flex-col bg-paper md:h-screen md:overflow-hidden">
-      <header className="flex h-topbar flex-none items-center gap-4 border-b-2 border-stamp bg-surface px-[18px]">
-        <div className="flex flex-none items-center gap-2.5">
-          <span aria-hidden="true" className="block size-[22px] rounded-md bg-stamp" />
-          <span className="font-display text-17 font-bold tracking-[-0.02em] text-ink">
-            prácticas.
-          </span>
-        </div>
+      <header className="flex h-topbar flex-none items-center gap-4 border-b border-line bg-surface px-5 shadow-xs">
+        <BrandLogo size="md" />
 
         <div className="ml-auto flex items-center gap-3">
-          <div className="flex items-center gap-2.5 rounded-full border border-line py-1 pl-1 pr-2.5">
+          <div className="flex items-center gap-2.5 rounded-full border border-line bg-surface py-1 pl-1 pr-2.5 shadow-2xs">
             <span
               aria-hidden="true"
-              className="flex size-7 flex-none items-center justify-center rounded-full bg-stamp text-12 font-semibold text-surface"
+              className="flex size-7 flex-none items-center justify-center rounded-full bg-stamp text-12 font-semibold text-white"
             >
               {initialsOf(user?.fullName)}
             </span>
@@ -115,7 +131,7 @@ export function AppLayout() {
           >
             {navGroups.map((group) => (
               <div key={group.title}>
-                <div className="px-2.5 pb-1.5 text-11 uppercase tracking-[0.07em] text-inkMute">
+                <div className="px-2.5 pb-1.5 text-11 font-semibold uppercase tracking-[0.08em] text-inkMute">
                   {group.title}
                 </div>
                 <div className="flex flex-wrap gap-1 md:flex-col md:flex-nowrap">
@@ -125,10 +141,10 @@ export function AppLayout() {
                       to={item.path}
                       className={({ isActive }) =>
                         cn(
-                          'flex h-9 items-center rounded-md px-3 text-14 transition-colors',
+                          'flex h-9 items-center rounded-lg px-3 text-14 transition-colors',
                           isActive
-                            ? 'bg-surface font-semibold text-ink'
-                            : 'text-inkBody hover:bg-navHover hover:text-ink',
+                            ? 'bg-surface font-semibold text-stamp shadow-xs border border-line/70'
+                            : 'text-inkBody hover:bg-soft hover:text-ink',
                         )
                       }
                     >

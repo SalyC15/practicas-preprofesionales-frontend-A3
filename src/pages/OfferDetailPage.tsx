@@ -3,6 +3,7 @@ import { Link, useParams } from 'react-router-dom'
 import { type Application, apply, listMine } from '@/api/applications'
 import { ApiError } from '@/api/client'
 import { type Offer, getOffer } from '@/api/offers'
+import { useAuth } from '@/auth/AuthContext'
 import { Tag } from '@/components/Chip'
 import { PageHeader } from '@/components/PageHeader'
 import { LoadingState, Panel, Section } from '@/components/Panel'
@@ -99,6 +100,9 @@ export function OfferDetailPage() {
   const [submitting, setSubmitting] = useState(false)
   const [submitError, setSubmitError] = useState<string | null>(null)
 
+  const { role, user } = useAuth()
+  const isStudent = role === 'STUDENT'
+
   useEffect(() => {
     let cancelled = false
 
@@ -113,21 +117,25 @@ export function OfferDetailPage() {
         }
       })
 
-    listMine()
-      .then((applications) => {
-        if (!cancelled) setExistingApplication(applications.find((a) => a.offerId === offerId) ?? null)
-      })
-      .catch(() => {
-        // Si no se puede confirmar el estado de la postulación, se deja el
-        // formulario disponible: es preferible dejar postular de más que
-        // esconder el botón por un error de red al consultar el historial.
-        if (!cancelled) setExistingApplication(null)
-      })
+    if (isStudent) {
+      listMine()
+        .then((applications) => {
+          if (!cancelled) setExistingApplication(applications.find((a) => a.offerId === offerId) ?? null)
+        })
+        .catch(() => {
+          // Si no se puede confirmar el estado de la postulación, se deja el
+          // formulario disponible: es preferible dejar postular de más que
+          // esconder el botón por un error de red al consultar el historial.
+          if (!cancelled) setExistingApplication(null)
+        })
+    } else {
+      setExistingApplication(null)
+    }
 
     return () => {
       cancelled = true
     }
-  }, [offerId])
+  }, [offerId, isStudent])
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
@@ -202,49 +210,57 @@ export function OfferDetailPage() {
         </div>
       </Section>
 
-      <ApplicationSection
-        application={existingApplication}
-        form={
-          <form className="flex flex-col gap-4" onSubmit={handleSubmit} noValidate>
-            <div className="flex flex-col gap-1.5">
-              <Label htmlFor="motivation">Contale por qué te interesa</Label>
-              <p className="text-12 text-inkSoft">
-                Las empresas responden antes a quien escribe dos líneas.
-              </p>
-              <Textarea
-                id="motivation"
-                value={motivation}
-                onChange={(event) => {
-                  setMotivation(event.target.value)
-                  if (motivationError) setMotivationError(null)
-                }}
-                rows={4}
-                placeholder="Ej. Estoy en octavo ciclo y trabajé en mantenimiento de bombas en el laboratorio."
-                aria-invalid={Boolean(motivationError)}
-                aria-describedby="motivation-hint"
-              />
-              <p id="motivation-hint" className="self-end font-data text-12 text-inkSoft">
-                {remainingHint}
-              </p>
-              {motivationError ? (
-                <p role="alert" className="text-12 text-void">
-                  {motivationError}
+      {isStudent ? (
+        <ApplicationSection
+          application={existingApplication}
+          form={
+            <form className="flex flex-col gap-4" onSubmit={handleSubmit} noValidate>
+              <div className="flex flex-col gap-1.5">
+                <Label htmlFor="motivation">Contale por qué te interesa</Label>
+                <p className="text-12 text-inkSoft">
+                  Las empresas responden antes a quien escribe dos líneas.
+                </p>
+                <Textarea
+                  id="motivation"
+                  value={motivation}
+                  onChange={(event) => {
+                    setMotivation(event.target.value)
+                    if (motivationError) setMotivationError(null)
+                  }}
+                  rows={4}
+                  placeholder="Ej. Estoy en octavo ciclo y trabajé en mantenimiento de bombas en el laboratorio."
+                  aria-invalid={Boolean(motivationError)}
+                  aria-describedby="motivation-hint"
+                />
+                <p id="motivation-hint" className="self-end font-data text-12 text-inkSoft">
+                  {remainingHint}
+                </p>
+                {motivationError ? (
+                  <p role="alert" className="text-12 text-void">
+                    {motivationError}
+                  </p>
+                ) : null}
+              </div>
+
+              {submitError ? (
+                <p role="alert" className="rounded-md bg-chipVoid px-3 py-2.5 text-13 text-void">
+                  {submitError}
                 </p>
               ) : null}
-            </div>
 
-            {submitError ? (
-              <p role="alert" className="rounded-md bg-chipVoid px-3 py-2.5 text-13 text-void">
-                {submitError}
-              </p>
-            ) : null}
-
-            <Button type="submit" disabled={submitting} className="self-start">
-              {submitting ? 'Enviando…' : 'Enviar postulación'}
-            </Button>
-          </form>
-        }
-      />
+              <Button type="submit" disabled={submitting} className="self-start">
+                {submitting ? 'Enviando…' : 'Enviar postulación'}
+              </Button>
+            </form>
+          }
+        />
+      ) : (
+        <Panel className="p-5 text-13 text-inkMid flex items-center justify-between">
+          <span>
+            Estás visualizando esta oferta con rol <strong>{role}</strong>. Las postulaciones son gestionadas directamente por estudiantes.
+          </span>
+        </Panel>
+      )}
     </>
   )
 }

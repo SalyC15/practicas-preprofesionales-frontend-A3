@@ -31,12 +31,12 @@ export function ProgressBar({
       className={cn(
         'flex w-full overflow-hidden rounded-full',
         size === 'sm' ? 'h-[5px]' : 'h-2',
-        onTint ? 'bg-surface' : 'bg-paperRule',
+        onTint ? 'bg-white/20' : 'bg-slate-200/80',
         className,
       )}
     >
-      <span className="block h-full bg-stamp" style={{ width: `${value}%` }} />
-      <span className="block h-full bg-dotPending" style={{ width: `${pendingValue}%` }} />
+      <span className={cn('block h-full transition-all duration-300', onTint ? 'bg-white' : 'bg-stamp')} style={{ width: `${value}%` }} />
+      <span className={cn('block h-full transition-all duration-300', onTint ? 'bg-amber-400' : 'bg-dotPending')} style={{ width: `${pendingValue}%` }} />
     </div>
   )
 }

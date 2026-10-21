@@ -16,6 +16,7 @@ import { EvaluatePage } from '@/pages/EvaluatePage'
 import { CompanyOffersPage } from '@/pages/CompanyOffersPage'
 import { OfferApplicationsPage } from '@/pages/OfferApplicationsPage'
 import { AccreditationPage } from '@/pages/AccreditationPage'
+import { CompaniesPage } from '@/pages/CompaniesPage'
 
 const ALL_ROLES: Role[] = ['STUDENT', 'TUTOR', 'COMPANY', 'COORDINATOR']
 
@@ -23,7 +24,7 @@ const HOME_BY_ROLE: Record<Role, string> = {
   STUDENT: '/mi-practica',
   TUTOR: '/practicantes',
   COMPANY: '/ofertas-empresa',
-  COORDINATOR: '/acreditacion',
+  COORDINATOR: '/empresas',
 }
 
 interface RouteDef {
@@ -33,8 +34,8 @@ interface RouteDef {
 }
 
 const ROUTES: RouteDef[] = [
-  { path: '/ofertas', roles: ['STUDENT'], element: <OffersPage /> },
-  { path: '/ofertas/:id', roles: ['STUDENT'], element: <OfferDetailPage /> },
+  { path: '/ofertas', roles: ['STUDENT', 'COORDINATOR', 'TUTOR'], element: <OffersPage /> },
+  { path: '/ofertas/:id', roles: ['STUDENT', 'COORDINATOR', 'TUTOR'], element: <OfferDetailPage /> },
   { path: '/postulaciones', roles: ['STUDENT'], element: <MyApplicationsPage /> },
   { path: '/mi-practica', roles: ['STUDENT'], element: <MyPlacementPage /> },
   { path: '/horas', roles: ['STUDENT'], element: <HourLogsPage /> },
@@ -44,6 +45,7 @@ const ROUTES: RouteDef[] = [
   { path: '/practicantes/:id/evaluar', roles: ['TUTOR'], element: <EvaluatePage /> },
   { path: '/ofertas-empresa', roles: ['COMPANY'], element: <CompanyOffersPage /> },
   { path: '/ofertas-empresa/:id/postulaciones', roles: ['COMPANY'], element: <OfferApplicationsPage /> },
+  { path: '/empresas', roles: ['COORDINATOR'], element: <CompaniesPage /> },
   { path: '/acreditacion', roles: ['COORDINATOR'], element: <AccreditationPage /> },
 ]
 

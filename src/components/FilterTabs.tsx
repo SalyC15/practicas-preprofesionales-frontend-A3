@@ -46,7 +46,7 @@ export function FilterTabs({
             className={cn(
               'inline-flex h-[30px] items-center rounded-md px-3 text-13 transition-colors',
               active
-                ? 'bg-stamp font-semibold text-surface'
+                ? 'bg-stamp font-semibold text-white'
                 : 'text-inkMid hover:bg-pillHover hover:text-ink',
             )}
           >

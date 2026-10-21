@@ -21,7 +21,7 @@ interface StatCardProps {
 
 export function StatCard({ label, value, note, noteTone = 'neutral', className }: StatCardProps) {
   return (
-    <div className={cn('rounded-xl bg-surface px-[18px] py-4', className)}>
+    <div className={cn('rounded-xl bg-surface border border-line/80 px-[18px] py-4 shadow-xs', className)}>
       <div className="text-12 text-inkSoft">{label}</div>
       <div className="mt-2.5 flex flex-wrap items-baseline gap-x-2.5 gap-y-1">
         <span className="font-data text-26 font-semibold leading-none text-ink">{value}</span>

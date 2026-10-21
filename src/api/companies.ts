@@ -50,9 +50,24 @@ export interface OfferApplication {
 
 export type ApplicationDecision = Extract<ApplicationStatus, 'INTERVIEW' | 'ACCEPTED' | 'REJECTED'>
 
+export interface CreateCompanyDto {
+  taxId: string
+  name: string
+  sector: string
+  contactEmail: string
+}
+
 /** Empresas registradas. No sincronizable: siempre requiere red. */
 export function listCompanies(): Promise<Company[]> {
   return api<Company[]>('/companies')
+}
+
+/** Registrar una nueva empresa (requiere rol COORDINATOR). */
+export function createCompany(dto: CreateCompanyDto): Promise<Company> {
+  return api<Company>('/companies', {
+    method: 'POST',
+    body: JSON.stringify(dto),
+  })
 }
 
 /** Ofertas de la empresa autenticada, en cualquier estado (DRAFT/PUBLISHED/CLOSED). */
