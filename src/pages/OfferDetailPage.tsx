@@ -100,7 +100,7 @@ export function OfferDetailPage() {
   const [submitting, setSubmitting] = useState(false)
   const [submitError, setSubmitError] = useState<string | null>(null)
 
-  const { role, user } = useAuth()
+  const { role } = useAuth()
   const isStudent = role === 'STUDENT'
 
   useEffect(() => {
