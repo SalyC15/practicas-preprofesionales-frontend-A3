@@ -55,9 +55,9 @@ helpers puros que ya casi están separados (`formatDateForConfirmation`,
 `src/offline/hooks/`: `useHourLogs.ts`, `usePlacement.ts`, `useSyncStatus.ts`. La
 excepción es `useOnline.ts`, que sí tiene spec.
 
-No supimos testear hooks que tocan IndexedDB y lo dejamos así. Todos usan `useLiveQuery` de
-`dexie-react-hooks` contra la base real de Dexie; en otras partes del repo probamos con
-`fake-indexeddb` (mira `offline/db.spec.ts` como referencia) y no debería ser muy distinto
-hacerlo acá, pero nunca nos sentamos a escribirlos. Si vas a tocar cómo se leen las horas o
-la plaza del estudiante desde la UI, vas a ciegas. No hay red de seguridad que te avise si
-rompiste algo.
+**Pagada en E6-06** (PR de `test/e6-06-hooks-tests`): los tres hooks tienen ahora sus
+propios specs contra la base real de Dexie sobre `fake-indexeddb`, con el `AuthProvider`
+real para `usePlacement`. La carpeta `src/offline/hooks/` quedó al 100% de cobertura en
+statements, branches, funciones y líneas. Queda pendiente lo que sigue sin red de seguridad:
+`src/offline/hooks/useOnline.ts` sigue cubierta solo por su spec propio, y `src/offline/`
+en general (`pull.ts`, `push.ts`, `scheduler.ts`) continúa sin tests directos.
