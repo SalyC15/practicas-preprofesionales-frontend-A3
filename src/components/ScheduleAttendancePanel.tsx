@@ -9,7 +9,6 @@ import type { ScheduleSummary, ScheduledSession } from '@/lib/schedule'
 interface ScheduleAttendancePanelProps {
   summary: ScheduleSummary
   companyName?: string | null
-  offerTitle?: string | null
   onConfirmAttendance: (session: ScheduledSession) => Promise<void>
 }
 
@@ -30,7 +29,6 @@ function formatSessionDate(dateValue: string): string {
 export function ScheduleAttendancePanel({
   summary,
   companyName,
-  offerTitle,
   onConfirmAttendance,
 }: ScheduleAttendancePanelProps) {
   const [filter, setFilter] = useState<'pending' | 'confirmed' | 'all'>('pending')
