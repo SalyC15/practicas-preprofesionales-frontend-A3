@@ -13,7 +13,6 @@ import {
   DialogDescription,
   DialogHeader,
   DialogTitle,
-  DialogTrigger,
 } from '@/components/ui/dialog'
 import { Ledger, LedgerHeaderRow } from '@/components/ledger/Ledger'
 import { LedgerRow } from '@/components/ledger/LedgerRow'
@@ -167,7 +166,6 @@ export function HourLogsPage() {
         <ScheduleAttendancePanel
           summary={scheduleSummary}
           companyName={placement.companyName}
-          offerTitle={placement.offerTitle}
           onConfirmAttendance={handleConfirmAttendance}
         />
       ) : null}

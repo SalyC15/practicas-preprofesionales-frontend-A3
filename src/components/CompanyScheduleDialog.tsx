@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Calendar, Clock, CheckCircle2, ChevronDown, ChevronUp, Sparkles, Building2 } from 'lucide-react'
+import { Calendar, ChevronDown, ChevronUp, Sparkles } from 'lucide-react'
 import {
   Dialog,
   DialogBody,
