@@ -8,8 +8,24 @@ export interface Company {
   name: string
   sector: string
   contactEmail: string
+  phone?: string | null
+  address?: string | null
+  logoUrl?: string | null
+  description?: string | null
+  website?: string | null
   verified: boolean
   createdAt: string
+}
+
+export interface UpdateCompanyProfileDto {
+  name?: string
+  sector?: string
+  contactEmail?: string
+  phone?: string
+  address?: string
+  logoUrl?: string
+  description?: string
+  website?: string
 }
 
 export interface CreateOfferDto {
@@ -55,6 +71,8 @@ export interface CreateCompanyDto {
   name: string
   sector: string
   contactEmail: string
+  password?: string
+  verified?: boolean
 }
 
 /** Empresas registradas. No sincronizable: siempre requiere red. */
@@ -67,6 +85,14 @@ export function createCompany(dto: CreateCompanyDto): Promise<Company> {
   return api<Company>('/companies', {
     method: 'POST',
     body: JSON.stringify(dto),
+  })
+}
+
+/** Validar o revocar la verificación de una empresa (requiere rol COORDINATOR). */
+export function verifyCompany(id: number, verified: boolean): Promise<Company> {
+  return api<Company>(`/companies/${id}/verify`, {
+    method: 'PATCH',
+    body: JSON.stringify({ verified }),
   })
 }
 
@@ -116,6 +142,19 @@ export function createPlacement(applicationId: number, tutorId: number): Promise
   return api<{ id: number }>('/placements', {
     method: 'POST',
     body: JSON.stringify({ applicationId, tutorId }),
+  })
+}
+
+/** Obtener perfil de la empresa autenticada. */
+export function getMyCompany(): Promise<Company> {
+  return api<Company>('/companies/me')
+}
+
+/** Actualizar datos del perfil de la empresa autenticada. */
+export function updateMyCompany(dto: UpdateCompanyProfileDto): Promise<Company> {
+  return api<Company>('/companies/me', {
+    method: 'PATCH',
+    body: JSON.stringify(dto),
   })
 }
 

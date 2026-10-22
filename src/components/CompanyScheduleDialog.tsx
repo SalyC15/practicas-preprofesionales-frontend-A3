@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Calendar, Clock, CheckCircle2, ChevronDown, ChevronUp, Sparkles, Building2 } from 'lucide-react'
+import { Calendar, ChevronDown, ChevronUp, Sparkles } from 'lucide-react'
 import {
   Dialog,
   DialogBody,
@@ -21,6 +21,7 @@ interface CompanyScheduleDialogProps {
   companyName?: string
   requiredHours: number
   startDate?: string
+  endDate?: string
   dailyHours?: number
   startTime?: string
   endTime?: string
@@ -47,6 +48,7 @@ export function CompanyScheduleDialog({
   companyName,
   requiredHours,
   startDate,
+  endDate,
   dailyHours = 4,
   startTime = '08:00',
   endTime = '12:00',
@@ -57,6 +59,7 @@ export function CompanyScheduleDialog({
   // Crear un mock placement representativo para alimentar el generador
   const safeHours = Math.max(1, requiredHours || 300)
   const safeStartDate = startDate && startDate.trim() ? startDate : new Date().toISOString().split('T')[0]
+  const safeEndDate = endDate && endDate.trim() ? endDate : safeStartDate
 
   const mockPlacement: LocalPlacement = {
     id: 0,
@@ -64,7 +67,7 @@ export function CompanyScheduleDialog({
     tutorId: 0,
     companyId: 0,
     startDate: safeStartDate,
-    endDate: safeStartDate,
+    endDate: safeEndDate,
     requiredHours: safeHours,
     status: 'ACTIVE',
     companyName: companyName ?? 'Empresa',
@@ -84,6 +87,8 @@ export function CompanyScheduleDialog({
   const visibleSessions: ScheduledSession[] = showAllSessions
     ? schedule.sessions
     : schedule.sessions.slice(0, 15)
+
+  const hasDateMismatch = Boolean(endDate && endDate.trim() && endDate !== schedule.endDate)
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -116,9 +121,17 @@ export function CompanyScheduleDialog({
                     <strong className="text-stamp font-medium">{safeHours} horas</strong> en{' '}
                     <strong className="text-stamp font-medium">{schedule.totalSessions} sesiones</strong> de{' '}
                     <strong className="text-inkBody font-medium">{dailyHours} horas diarias</strong> (Lunes a Viernes de {startTime} a {endTime}).
-                    Cuando el estudiante sea aceptado en la plaza, el sistema le cargará estas fechas y el estudiante{' '}
-                    <span className="font-semibold text-forest">solo confirmará su asistencia con 1 clic</span>.
+                    Inicia el <strong className="text-ink">{formatSessionDate(schedule.startDate)}</strong> y finaliza exactamente el{' '}
+                    <strong className="text-stamp">{formatSessionDate(schedule.endDate)}</strong>.
                   </p>
+                  {hasDateMismatch ? (
+                    <p className="mt-1 rounded bg-pending/15 p-2 text-11 text-inkDeep">
+                      <strong>Aviso de fechas:</strong> En el formulario se ingresó fecha fin{' '}
+                      <span className="font-medium underline">{formatSessionDate(endDate!)}</span>, pero para completar{' '}
+                      {safeHours} h a {dailyHours} h/día se necesitan {schedule.totalSessions} días hábiles (finaliza el{' '}
+                      <span className="font-semibold text-stamp">{formatSessionDate(schedule.endDate)}</span>).
+                    </p>
+                  ) : null}
                 </div>
               </div>
             </div>
@@ -143,21 +156,21 @@ export function CompanyScheduleDialog({
               </div>
               <div className="rounded-lg border border-divider/60 bg-soft/60 p-3">
                 <span className="block text-11 font-medium uppercase tracking-wider text-inkSoft">
-                  Horario Diario
+                  Fecha Inicio
                 </span>
-                <span className="font-data text-15 font-semibold text-ink">
-                  {dailyHours} h/día
+                <span className="font-data text-13 font-semibold text-ink">
+                  {formatSessionDate(schedule.startDate)}
                 </span>
                 <span className="block text-10 text-inkSoft">{startTime}–{endTime}</span>
               </div>
               <div className="rounded-lg border border-divider/60 bg-soft/60 p-3">
                 <span className="block text-11 font-medium uppercase tracking-wider text-inkSoft">
-                  Jornada
+                  Fecha Fin Exacta
                 </span>
-                <span className="text-13 font-semibold text-forest">
-                  Lun a Vie
+                <span className="font-data text-13 font-semibold text-forest">
+                  {formatSessionDate(schedule.endDate)}
                 </span>
-                <span className="block text-10 text-inkSoft">Sin fines de semana</span>
+                <span className="block text-10 text-inkSoft">Última sesión #{schedule.totalSessions}</span>
               </div>
             </div>
 
@@ -168,7 +181,7 @@ export function CompanyScheduleDialog({
                   Desglose de sesiones ({schedule.sessions.length} programadas)
                 </h4>
                 <span className="text-11 font-data text-inkSoft">
-                  Fecha inicio: {formatSessionDate(safeStartDate)}
+                  {formatSessionDate(schedule.startDate)} → {formatSessionDate(schedule.endDate)}
                 </span>
               </div>
 

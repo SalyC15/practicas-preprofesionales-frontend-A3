@@ -38,26 +38,25 @@ la vas a notar mirando la pantalla, pero si escribes un test que aserte sobre el
 los estados del indicador, la vas a agarrar. No nos alcanzó a arreglar. Hay que juntar
 ambos `setStatus` en uno solo, o calcular `pending` antes de marcar `syncing: false`.
 
-## D-09 · `HourLogForm.tsx` hace de todo
+## D-09 · [RESUELTO] `HourLogForm.tsx` hacía de todo
 
-`src/components/HourLogForm.tsx`, 348 líneas.
+Pagada en E6-04: `HourLogForm.tsx` conecta el controlador con la vista. Los módulos de
+`src/components/hour-log-form/` separan el reducer de estado, validación, etiquetas,
+construcción de la operación y persistencia local con encolado. La vista solo presenta
+los datos y comunica eventos. Cada archivo resultante tiene menos de 150 líneas.
 
-Estado del formulario, las dos copias de la validación de horas (ver D-06), formateo de la
-fecha en español para la confirmación, cálculo de la duración a partir de inicio y fin, la
-escritura a `db.hourLogs` y el `enqueue()` al outbox, todo en el mismo componente.
-Funciona, pero cualquier cambio, hasta uno chico como agregar un campo, obliga a leerlo
-entero para saber qué más se puede romper. Debería partirse en un hook de formulario, los
-helpers puros que ya casi están separados (`formatDateForConfirmation`,
-`computeDurationLabel`) y un hook de persistencia aparte. No llegamos.
+Las pruebas de lógica no necesitan renderizar React y cubren validación, transiciones,
+operación a encolar y errores de persistencia. Se conservan las pruebas de integración
+con Dexie y outbox para comprobar el comportamiento del formulario sin conexión.
 
 ## D-10 · Los hooks que tocan Dexie no tienen tests
 
 `src/offline/hooks/`: `useHourLogs.ts`, `usePlacement.ts`, `useSyncStatus.ts`. La
 excepción es `useOnline.ts`, que sí tiene spec.
 
-No supimos testear hooks que tocan IndexedDB y lo dejamos así. Todos usan `useLiveQuery` de
-`dexie-react-hooks` contra la base real de Dexie; en otras partes del repo probamos con
-`fake-indexeddb` (mira `offline/db.spec.ts` como referencia) y no debería ser muy distinto
-hacerlo acá, pero nunca nos sentamos a escribirlos. Si vas a tocar cómo se leen las horas o
-la plaza del estudiante desde la UI, vas a ciegas. No hay red de seguridad que te avise si
-rompiste algo.
+**Pagada en E6-06** (PR de `test/e6-06-hooks-tests`): los tres hooks tienen ahora sus
+propios specs contra la base real de Dexie sobre `fake-indexeddb`, con el `AuthProvider`
+real para `usePlacement`. La carpeta `src/offline/hooks/` quedó al 100% de cobertura en
+statements, branches, funciones y líneas. Queda pendiente lo que sigue sin red de seguridad:
+`src/offline/hooks/useOnline.ts` sigue cubierta solo por su spec propio, y `src/offline/`
+en general (`pull.ts`, `push.ts`, `scheduler.ts`) continúa sin tests directos.

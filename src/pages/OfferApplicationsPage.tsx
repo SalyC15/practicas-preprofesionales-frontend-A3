@@ -286,6 +286,7 @@ export function OfferApplicationsPage() {
         offerTitle={offer.title}
         requiredHours={offer.requiredHours}
         startDate={offer.periodStart}
+        endDate={offer.periodEnd}
       />
 
       {/* Modal para asignar tutor y crear práctica (rol Coordinador) */}

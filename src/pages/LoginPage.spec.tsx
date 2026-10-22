@@ -13,7 +13,7 @@ it('shows a clear Spanish message on startup expiry', async () => {
     expiresAt: Date.now() - 1, revision: 'expired',
   }))
   render(<MemoryRouter><AuthProvider><LoginPage /></AuthProvider></MemoryRouter>)
-  expect(await screen.findByRole('status')).toHaveTextContent('Tu sesión expiró. Volvé a iniciar sesión')
+  expect(await screen.findByRole('status')).toHaveTextContent('Tu sesión expiró. Vuelve a iniciar sesión')
   expect(localStorage.getItem('access_token')).toBeNull()
 })
 

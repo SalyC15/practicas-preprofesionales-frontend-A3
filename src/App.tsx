@@ -14,6 +14,7 @@ import { MyStudentsPage } from '@/pages/MyStudentsPage'
 import { ReviewHoursPage } from '@/pages/ReviewHoursPage'
 import { EvaluatePage } from '@/pages/EvaluatePage'
 import { CompanyOffersPage } from '@/pages/CompanyOffersPage'
+import { CompanyProfilePage } from '@/pages/CompanyProfilePage'
 import { OfferApplicationsPage } from '@/pages/OfferApplicationsPage'
 import { AccreditationPage } from '@/pages/AccreditationPage'
 import { CompaniesPage } from '@/pages/CompaniesPage'
@@ -44,6 +45,7 @@ const ROUTES: RouteDef[] = [
   { path: '/practicantes/:id/horas', roles: ['TUTOR'], element: <ReviewHoursPage /> },
   { path: '/practicantes/:id/evaluar', roles: ['TUTOR'], element: <EvaluatePage /> },
   { path: '/ofertas-empresa', roles: ['COMPANY'], element: <CompanyOffersPage /> },
+  { path: '/perfil-empresa', roles: ['COMPANY'], element: <CompanyProfilePage /> },
   { path: '/ofertas-empresa/:id/postulaciones', roles: ['COMPANY', 'COORDINATOR'], element: <OfferApplicationsPage /> },
   { path: '/ofertas/:id/postulaciones', roles: ['COMPANY', 'COORDINATOR'], element: <OfferApplicationsPage /> },
   { path: '/empresas', roles: ['COORDINATOR'], element: <CompaniesPage /> },

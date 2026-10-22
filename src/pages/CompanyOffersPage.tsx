@@ -34,6 +34,7 @@ import { Calendar } from 'lucide-react'
 import { parseLocalDate } from '@/lib/date'
 import { plural } from '@/lib/utils'
 import { CompanyScheduleDialog } from '@/components/CompanyScheduleDialog'
+import { calculateEndDateFromHours, calculateWorkingHoursBetween } from '@/lib/schedule'
 
 type OfferActionState = 'publishing' | 'closing' | 'published' | 'closed' | null
 
@@ -322,6 +323,60 @@ function CreateOfferDialog({
               </div>
             </div>
 
+            {/* Asistente interactivo de cálculo de horas y sincronización de fechas */}
+            {form.periodStart && form.requiredHours && Number(form.requiredHours) > 0 ? (
+              <div className="flex flex-col gap-1.5 rounded-lg border border-stamp/20 bg-stamp/5 p-2.5 text-12 text-ink">
+                <div className="flex items-center justify-between">
+                  <span>
+                    Con inicio el <strong>{formatDate(form.periodStart)}</strong>, las{' '}
+                    <strong>{form.requiredHours} h</strong> se completan el{' '}
+                    <strong className="text-stamp">
+                      {formatDate(calculateEndDateFromHours(form.periodStart, Number(form.requiredHours)))}
+                    </strong>{' '}
+                    (a 4h/día, Lun-Vie).
+                  </span>
+                </div>
+                {form.periodEnd !== calculateEndDateFromHours(form.periodStart, Number(form.requiredHours)) ? (
+                  <button
+                    type="button"
+                    className="self-start text-11 font-semibold text-stamp underline hover:text-stamp/80"
+                    onClick={() =>
+                      onFieldChange(
+                        'periodEnd',
+                        calculateEndDateFromHours(form.periodStart, Number(form.requiredHours)),
+                      )
+                    }
+                  >
+                    👉 Sincronizar fecha fin automáticamente a {calculateEndDateFromHours(form.periodStart, Number(form.requiredHours))}
+                  </button>
+                ) : (
+                  <span className="text-11 font-medium text-forest">✓ Fechas y horas sincronizadas con exactitud</span>
+                )}
+              </div>
+            ) : null}
+
+            {form.periodStart && form.periodEnd && form.periodEnd >= form.periodStart ? (
+              <div className="flex items-center justify-between rounded-lg border border-divider/50 bg-soft/60 px-3 py-2 text-11 text-inkDeep">
+                <span>
+                  Horas laborables posibles en el rango: <strong>{calculateWorkingHoursBetween(form.periodStart, form.periodEnd)} h</strong>
+                </span>
+                {String(calculateWorkingHoursBetween(form.periodStart, form.periodEnd)) !== form.requiredHours ? (
+                  <button
+                    type="button"
+                    className="font-semibold text-stamp underline hover:text-stamp/80"
+                    onClick={() =>
+                      onFieldChange(
+                        'requiredHours',
+                        String(calculateWorkingHoursBetween(form.periodStart, form.periodEnd)),
+                      )
+                    }
+                  >
+                    Usar {calculateWorkingHoursBetween(form.periodStart, form.periodEnd)} h
+                  </button>
+                ) : null}
+              </div>
+            ) : null}
+
             <div className="pt-1">
               <Button
                 type="button"
@@ -435,7 +490,25 @@ export function CompanyOffersPage() {
   }
 
   function handleFieldChange(field: keyof CreateOfferFormState, value: string) {
-    setForm((prev) => ({ ...prev, [field]: value }))
+    setForm((prev) => {
+      const next = { ...prev, [field]: value }
+      if (field === 'requiredHours' && next.periodStart && Number(value) > 0) {
+        const prevComputed = prev.periodStart && Number(prev.requiredHours) > 0
+          ? calculateEndDateFromHours(prev.periodStart, Number(prev.requiredHours))
+          : ''
+        if (!prev.periodEnd || prev.periodEnd === prevComputed) {
+          next.periodEnd = calculateEndDateFromHours(next.periodStart, Number(value))
+        }
+      } else if (field === 'periodStart' && value && Number(next.requiredHours) > 0) {
+        const prevComputed = prev.periodStart && Number(prev.requiredHours) > 0
+          ? calculateEndDateFromHours(prev.periodStart, Number(prev.requiredHours))
+          : ''
+        if (!prev.periodEnd || prev.periodEnd === prevComputed) {
+          next.periodEnd = calculateEndDateFromHours(value, Number(next.requiredHours))
+        }
+      }
+      return next
+    })
   }
 
   async function handleCreate(event: FormEvent<HTMLFormElement>) {
@@ -551,6 +624,7 @@ export function CompanyOffersPage() {
           companyName={myCompany?.name}
           requiredHours={selectedScheduleOffer.requiredHours}
           startDate={selectedScheduleOffer.periodStart}
+          endDate={selectedScheduleOffer.periodEnd}
         />
       ) : null}
 
@@ -563,6 +637,7 @@ export function CompanyOffersPage() {
           companyName={myCompany?.name}
           requiredHours={Number(form.requiredHours) || 300}
           startDate={form.periodStart || new Date().toISOString().split('T')[0]}
+          endDate={form.periodEnd}
         />
       ) : null}
     </>

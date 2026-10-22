@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { generatePlacementSchedule } from './schedule'
+import { calculateEndDateFromHours, calculateWorkingHoursBetween, generatePlacementSchedule } from './schedule'
 import type { LocalHourLog, LocalPlacement } from '@/offline/db'
 
 describe('generatePlacementSchedule', () => {
@@ -94,5 +94,20 @@ describe('generatePlacementSchedule', () => {
     expect(summary.totalSessions).toBe(41) // 40 de 4h + 1 de 2h
     expect(summary.plannedHours).toBe(162)
     expect(summary.sessions[40].hours).toBe(2)
+  })
+
+  it('calculates exact end date from hours skipping weekends', () => {
+    // 8 horas a 4h/día empezando un Viernes 2026-03-06:
+    // Sesión 1: Viernes 2026-03-06 (4h)
+    // Fin de semana (03-07, 03-08)
+    // Sesión 2: Lunes 2026-03-09 (4h) -> Fin exacto
+    const endDate = calculateEndDateFromHours('2026-03-06', 8)
+    expect(endDate).toBe('2026-03-09')
+  })
+
+  it('calculates available working hours between two dates skipping weekends', () => {
+    // Desde Viernes 2026-03-06 hasta Lunes 2026-03-09 (2 días hábiles = 8h a 4h/día)
+    const hours = calculateWorkingHoursBetween('2026-03-06', '2026-03-09')
+    expect(hours).toBe(8)
   })
 })
