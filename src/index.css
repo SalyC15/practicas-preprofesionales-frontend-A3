@@ -9,42 +9,42 @@
 
 @layer base {
   :root {
-    /* Fondo de la aplicación y superficies */
-    --paper: 210 42% 95%; /* #EEF3F8 */
-    --surface: 0 0% 100%; /* #FFFFFF */
-    --well: 210 50% 98%; /* #F6F9FC — cabecera de tabla, hover de fila */
-    --soft: 213 44% 95%; /* #EDF2F8 — relleno neutro: tags, chips, botón pasivo */
-    --hero: 212 52% 90%; /* #D9E5F3 — panel destacado */
+    /* Fondo de la aplicación y superficies — Slate neutro moderno y limpio */
+    --paper: 220 14% 97%; /* #F8FAFC — fondo general limpio tipo SaaS */
+    --surface: 0 0% 100%; /* #FFFFFF — superficies y tarjetas */
+    --well: 210 20% 98%; /* #F8FAFC — cabeceras sutiles */
+    --soft: 215 16% 94%; /* #E2E8F0 — chips neutros y botones secundarios */
+    --hero: 222 47% 11%; /* #0F172A — panel destacado oscuro */
 
-    /* Líneas */
-    --line: 214 38% 89%; /* #D9E2EE — borde de controles */
-    --paper-rule: 212 37% 93%; /* #E7EDF4 — separador de filas */
+    /* Líneas y bordes nítidos */
+    --line: 215 16% 89%; /* #E2E8F0 — borde de controles */
+    --paper-rule: 215 16% 93%; /* #F1F5F9 — separador sutil de filas */
 
-    /* Texto */
-    --ink: 207 18% 10%; /* #151A1E */
-    --ink-deep: 213 26% 23%; /* #2C3A4B — texto sobre fondos teñidos */
-    --ink-body: 215 19% 30%; /* #3F4B5C */
-    --ink-mid: 214 15% 36%; /* #4F5B6B — subtítulos */
-    --ink-soft: 215 15% 41%; /* #5A6779 — texto secundario */
-    --ink-mute: 213 16% 57%; /* #7F8FA3 — etiquetas en versalitas */
+    /* Tipografía de alto contraste */
+    --ink: 222 47% 11%; /* #0F172A — texto principal carbón */
+    --ink-deep: 215 25% 27%; /* #334155 — texto secundario con cuerpo */
+    --ink-body: 215 25% 27%; /* #334155 — párrafos */
+    --ink-mid: 215 16% 47%; /* #64748B — subtítulos */
+    --ink-soft: 215 16% 57%; /* #64748B — metadatos */
+    --ink-mute: 215 16% 65%; /* #94A3B8 — etiquetas en versalitas */
 
-    /* Acentos semánticos */
-    --stamp: 212 77% 24%; /* #0E3A6B — primario y estado resuelto */
-    --pending: 34 84% 23%; /* #6B4109 — pendiente */
-    --void: 4 72% 32%; /* #8E1F17 — rechazado */
+    /* Acentos semánticos limpios y legibles */
+    --stamp: 217 91% 35%; /* #1E40AF — primario y estado resuelto azul cobalto institucional */
+    --pending: 32 95% 30%; /* #92400E — ámbar cálido para pendientes */
+    --void: 0 74% 42%; /* #BE123C — carmesí para rechazos */
 
-    /* Tintes de chip */
-    --chip-stamp: 213 59% 93%; /* #E4EDF8 */
-    --chip-pending: 37 68% 94%; /* #FAF2E5 */
-    --chip-void: 4 65% 95%; /* #FBEDEC */
-    --dot-pending: 33 78% 30%; /* #885311 */
-    --dot-void: 4 71% 41%; /* #B3281E */
+    /* Tintes de chips con alto contraste (fondo suave + texto definido) */
+    --chip-stamp: 214 95% 94%; /* #EFF6FF — azul cielo muy suave */
+    --chip-pending: 48 96% 94%; /* #FEF3C7 — ámbar pastel */
+    --chip-void: 0 86% 95%; /* #FFE4E6 — carmesí pastel */
+    --dot-pending: 36 100% 39%; /* #B45309 */
+    --dot-void: 0 72% 51%; /* #E11D48 */
 
-    /* Interacción */
-    --nav-hover: 212 52% 91%; /* #DCE7F4 */
-    --pill-hover: 212 52% 94%; /* #E9F0F8 */
-    --badge-soft: 212 50% 89%; /* #D5E2F1 */
-    --scrim: 212 70% 13%; /* base del velo del modal */
+    /* Interacción limpia */
+    --nav-hover: 215 16% 93%; /* #E2E8F0 — hover neutro */
+    --pill-hover: 215 16% 95%; /* #F1F5F9 — hover neutro para filtros */
+    --badge-soft: 215 16% 90%;
+    --scrim: 222 47% 11%;
   }
 
   body {

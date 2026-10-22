@@ -2,6 +2,8 @@ import type { ReactNode } from 'react'
 import { cn } from '@/lib/utils'
 
 interface PanelProps {
+  /** Título opcional del panel, a la izquierda de la barra superior. */
+  title?: ReactNode
   /** Barra superior del panel, separada por una regla. */
   toolbar?: ReactNode
   children: ReactNode
@@ -9,11 +11,12 @@ interface PanelProps {
 }
 
 /** Contenedor blanco de esquinas grandes: la caja base de listados y tablas. */
-export function Panel({ toolbar, children, className }: PanelProps) {
+export function Panel({ title, toolbar, children, className }: PanelProps) {
   return (
-    <div className={cn('overflow-hidden rounded-2xl bg-surface', className)}>
-      {toolbar ? (
+    <div className={cn('overflow-hidden rounded-2xl bg-surface border border-line/80 shadow-xs', className)}>
+      {title || toolbar ? (
         <div className="flex flex-wrap items-center gap-2 border-b border-paperRule px-[18px] py-3.5">
+          {title ? <h2 className="font-display text-15 font-semibold text-ink">{title}</h2> : null}
           {toolbar}
         </div>
       ) : null}

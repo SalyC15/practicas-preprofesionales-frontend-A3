@@ -13,13 +13,13 @@ import { plural } from '@/lib/utils'
 import { db, type LocalDocument } from '@/offline/db'
 import { usePlacement } from '@/offline/hooks/usePlacement'
 
-type DocumentKind = 'AGREEMENT' | 'INSURANCE' | 'REPORT' | 'EVIDENCE'
+export type DocumentKind = 'AGREEMENT' | 'INSURANCE' | 'REPORT' | 'EVIDENCE'
 
 // Espejo de REQUIRED_DOCS en el backend (placement.service.ts): estos dos son
 // los únicos que bloquean la activación de la práctica.
-const REQUIRED_KINDS: DocumentKind[] = ['AGREEMENT', 'INSURANCE']
+export const REQUIRED_KINDS: DocumentKind[] = ['AGREEMENT', 'INSURANCE']
 
-const KIND_LABEL: Record<DocumentKind, string> = {
+export const KIND_LABEL: Record<DocumentKind, string> = {
   AGREEMENT: 'Convenio',
   INSURANCE: 'Seguro',
   REPORT: 'Informe',
@@ -35,7 +35,7 @@ function formatDate(dateValue: string): string {
 }
 
 /** Último estado conocido de un tipo de documento, o `null` si no se subió. */
-function latestStatus(documents: LocalDocument[], kind: DocumentKind): string | null {
+export function latestStatus(documents: LocalDocument[], kind: DocumentKind): string | null {
   return (
     documents
       .filter((doc) => doc.kind === kind)

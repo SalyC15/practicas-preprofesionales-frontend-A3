@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react'
+import { fireEvent, render, screen } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { LocalHourLog, LocalPlacement } from '@/offline/db'
 
@@ -66,6 +66,13 @@ describe('HourLogsPage calendar dates', () => {
     render(<HourLogsPage />)
 
     expect(screen.getByText(`Motivo de rechazo: ${reason}`)).toBeInTheDocument()
-    expect(screen.getByText('SUBMITTED')).toBeInTheDocument()
+    expect(screen.getByText('ENVIADO')).toBeInTheDocument()
+  })
+
+  it('opens the dialog when clicking the register hours button', async () => {
+    render(<HourLogsPage />)
+    const button = screen.getByRole('button', { name: /Registrar horas/i })
+    fireEvent.click(button)
+    expect(await screen.findByRole('dialog')).toBeInTheDocument()
   })
 })

@@ -30,8 +30,10 @@ import {
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
+import { Calendar } from 'lucide-react'
 import { parseLocalDate } from '@/lib/date'
 import { plural } from '@/lib/utils'
+import { CompanyScheduleDialog } from '@/components/CompanyScheduleDialog'
 
 type OfferActionState = 'publishing' | 'closing' | 'published' | 'closed' | null
 
@@ -138,9 +140,10 @@ interface CompanyOfferCardProps {
   state: OfferActionState
   onPublish: (offerId: number) => void
   onClose: (offerId: number) => void
+  onViewSchedule: (offer: CompanyOffer) => void
 }
 
-function CompanyOfferCard({ offer, state, onPublish, onClose }: CompanyOfferCardProps) {
+function CompanyOfferCard({ offer, state, onPublish, onClose, onViewSchedule }: CompanyOfferCardProps) {
   const busy = state === 'publishing' || state === 'closing'
   const occupied = acceptedCount(offer)
 
@@ -154,6 +157,16 @@ function CompanyOfferCard({ offer, state, onPublish, onClose }: CompanyOfferCard
       meta={plural(offer.applications.length, 'postulación', 'postulaciones')}
       actions={
         <>
+          <Button
+            type="button"
+            size="sm"
+            variant="outline"
+            className="text-stamp hover:border-stamp/60"
+            onClick={() => onViewSchedule(offer)}
+          >
+            <Calendar className="mr-1.5 h-3.5 w-3.5" />
+            Cronograma ({offer.requiredHours}h)
+          </Button>
           <Button asChild size="sm" variant="outline">
             <Link to={`/ofertas-empresa/${offer.id}/postulaciones`}>Ver postulaciones</Link>
           </Button>
@@ -188,6 +201,7 @@ interface CreateOfferDialogProps {
   createError: string | null
   onFieldChange: (field: keyof CreateOfferFormState, value: string) => void
   onSubmit: (event: FormEvent<HTMLFormElement>) => void
+  onPreviewSchedule: () => void
 }
 
 function CreateOfferDialog({
@@ -199,6 +213,7 @@ function CreateOfferDialog({
   createError,
   onFieldChange,
   onSubmit,
+  onPreviewSchedule,
 }: CreateOfferDialogProps) {
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -307,6 +322,19 @@ function CreateOfferDialog({
               </div>
             </div>
 
+            <div className="pt-1">
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="w-full justify-center text-12 text-stamp border-stamp/30 hover:bg-stamp/5"
+                onClick={onPreviewSchedule}
+              >
+                <Calendar className="mr-1.5 h-3.5 w-3.5" />
+                Previsualizar cronograma ({form.requiredHours || '300'} h planificadas)
+              </Button>
+            </div>
+
             {createError ? (
               <p role="alert" className="rounded-md bg-chipVoid px-3 py-2.5 text-13 text-void">
                 {createError}
@@ -339,6 +367,9 @@ export function CompanyOffersPage() {
   const [formErrors, setFormErrors] = useState<CreateOfferFormErrors>({})
   const [creating, setCreating] = useState(false)
   const [createError, setCreateError] = useState<string | null>(null)
+
+  const [selectedScheduleOffer, setSelectedScheduleOffer] = useState<CompanyOffer | null>(null)
+  const [previewScheduleOpen, setPreviewScheduleOpen] = useState(false)
 
   function refetchOffers() {
     return listMyOffers()
@@ -490,6 +521,7 @@ export function CompanyOffersPage() {
                 state={actionState[offer.id] ?? null}
                 onPublish={handlePublish}
                 onClose={handleClose}
+                onViewSchedule={(selected) => setSelectedScheduleOffer(selected)}
               />
             ))}
           </OfferGrid>
@@ -505,7 +537,34 @@ export function CompanyOffersPage() {
         createError={createError}
         onFieldChange={handleFieldChange}
         onSubmit={handleCreate}
+        onPreviewSchedule={() => setPreviewScheduleOpen(true)}
       />
+
+      {/* Modal para ver cronograma de una oferta existente */}
+      {selectedScheduleOffer ? (
+        <CompanyScheduleDialog
+          open={Boolean(selectedScheduleOffer)}
+          onOpenChange={(open) => {
+            if (!open) setSelectedScheduleOffer(null)
+          }}
+          offerTitle={selectedScheduleOffer.title}
+          companyName={myCompany?.name}
+          requiredHours={selectedScheduleOffer.requiredHours}
+          startDate={selectedScheduleOffer.periodStart}
+        />
+      ) : null}
+
+      {/* Modal para previsualizar cronograma antes de crear oferta */}
+      {previewScheduleOpen ? (
+        <CompanyScheduleDialog
+          open={previewScheduleOpen}
+          onOpenChange={setPreviewScheduleOpen}
+          offerTitle={form.title.trim() || 'Nueva Oferta de Práctica'}
+          companyName={myCompany?.name}
+          requiredHours={Number(form.requiredHours) || 300}
+          startDate={form.periodStart || new Date().toISOString().split('T')[0]}
+        />
+      ) : null}
     </>
   )
 }

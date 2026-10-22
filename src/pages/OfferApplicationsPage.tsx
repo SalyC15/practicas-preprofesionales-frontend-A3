@@ -8,12 +8,17 @@ import {
 } from '@/api/companies'
 import { ApiError } from '@/api/client'
 import { type Offer, getOffer } from '@/api/offers'
+import { Calendar } from 'lucide-react'
 import { PageHeader } from '@/components/PageHeader'
 import { EmptyState, LoadingState, Panel, TableHeaderRow, rowClass } from '@/components/Panel'
 import { StatusBadge } from '@/components/StatusBadge'
 import { Button } from '@/components/ui/button'
 import { Ledger } from '@/components/ledger/Ledger'
 import { parseLocalDate } from '@/lib/date'
+import { CompanyScheduleDialog } from '@/components/CompanyScheduleDialog'
+
+import { useAuth } from '@/auth/AuthContext'
+import { AssignTutorDialog } from '@/components/AssignTutorDialog'
 
 type DecisionState = 'interviewing' | 'accepting' | 'rejecting' | null
 
@@ -39,13 +44,13 @@ function ColumnHeader() {
   )
 }
 
-function BackLink() {
+function BackLink({ isCoordinator, offerId }: { isCoordinator: boolean; offerId: number }) {
   return (
     <Link
-      to="/ofertas-empresa"
+      to={isCoordinator ? `/ofertas/${offerId}` : '/ofertas-empresa'}
       className="self-start text-13 font-semibold text-stamp hover:underline"
     >
-      ← Volver a mis ofertas
+      ← {isCoordinator ? 'Volver a la oferta' : 'Volver a mis ofertas'}
     </Link>
   )
 }
@@ -58,6 +63,8 @@ function BackLink() {
  * carrera real que el equipo debe poder encontrar.
  */
 export function OfferApplicationsPage() {
+  const { role } = useAuth()
+  const isCoordinator = role === 'COORDINATOR'
   const { id } = useParams<{ id: string }>()
   const offerId = Number(id)
 
@@ -67,6 +74,11 @@ export function OfferApplicationsPage() {
 
   const [decisionState, setDecisionState] = useState<Record<number, DecisionState>>({})
   const [decisionError, setDecisionError] = useState<string | null>(null)
+  const [scheduleOpen, setScheduleOpen] = useState(false)
+
+  const [assignModalOpen, setAssignModalOpen] = useState(false)
+  const [selectedAppForAssign, setSelectedAppForAssign] = useState<OfferApplication | null>(null)
+  const [createdPlacements, setCreatedPlacements] = useState<Record<number, boolean>>({})
 
   function refetchApplications() {
     return listApplicationsForOffer(offerId)
@@ -116,7 +128,7 @@ export function OfferApplicationsPage() {
   if (loadError) {
     return (
       <>
-        <BackLink />
+        <BackLink isCoordinator={isCoordinator} offerId={offerId} />
         <Panel>
           <p role="alert" className="px-5 py-14 text-center text-14 text-void">
             {loadError}
@@ -139,7 +151,7 @@ export function OfferApplicationsPage() {
 
   return (
     <>
-      <BackLink />
+      <BackLink isCoordinator={isCoordinator} offerId={offerId} />
 
       <PageHeader
         title={offer.title}
@@ -147,6 +159,18 @@ export function OfferApplicationsPage() {
           remaining > 0
             ? `${remaining} de ${offer.seats} cupos restantes`
             : `${offer.seats} de ${offer.seats} cupos ocupados`
+        }
+        actions={
+          <Button
+            type="button"
+            size="sm"
+            variant="outline"
+            className="text-stamp hover:border-stamp/60"
+            onClick={() => setScheduleOpen(true)}
+          >
+            <Calendar className="mr-1.5 h-3.5 w-3.5" />
+            Cronograma ({offer.requiredHours} h)
+          </Button>
         }
       />
 
@@ -228,6 +252,25 @@ export function OfferApplicationsPage() {
                         </Button>
                       </>
                     ) : null}
+
+                    {application.status === 'ACCEPTED' && isCoordinator ? (
+                      createdPlacements[application.id] ? (
+                        <span className="inline-flex items-center rounded-md bg-forest/10 px-2.5 py-1 text-12 font-medium text-forest border border-forest/20">
+                          Práctica creada
+                        </span>
+                      ) : (
+                        <Button
+                          type="button"
+                          size="sm"
+                          onClick={() => {
+                            setSelectedAppForAssign(application)
+                            setAssignModalOpen(true)
+                          }}
+                        >
+                          Asignar tutor y crear práctica
+                        </Button>
+                      )
+                    ) : null}
                   </span>
                 </div>
               )
@@ -235,6 +278,29 @@ export function OfferApplicationsPage() {
           </Ledger>
         )}
       </Panel>
+
+      {/* Modal de cronograma de la empresa para la oferta */}
+      <CompanyScheduleDialog
+        open={scheduleOpen}
+        onOpenChange={setScheduleOpen}
+        offerTitle={offer.title}
+        requiredHours={offer.requiredHours}
+        startDate={offer.periodStart}
+      />
+
+      {/* Modal para asignar tutor y crear práctica (rol Coordinador) */}
+      <AssignTutorDialog
+        open={assignModalOpen}
+        onOpenChange={setAssignModalOpen}
+        application={selectedAppForAssign}
+        offerTitle={offer.title}
+        onPlacementCreated={() => {
+          if (selectedAppForAssign) {
+            setCreatedPlacements((prev) => ({ ...prev, [selectedAppForAssign.id]: true }))
+          }
+          refetchApplications()
+        }}
+      />
     </>
   )
 }

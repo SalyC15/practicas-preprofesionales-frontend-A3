@@ -50,9 +50,24 @@ export interface OfferApplication {
 
 export type ApplicationDecision = Extract<ApplicationStatus, 'INTERVIEW' | 'ACCEPTED' | 'REJECTED'>
 
+export interface CreateCompanyDto {
+  taxId: string
+  name: string
+  sector: string
+  contactEmail: string
+}
+
 /** Empresas registradas. No sincronizable: siempre requiere red. */
 export function listCompanies(): Promise<Company[]> {
   return api<Company[]>('/companies')
+}
+
+/** Registrar una nueva empresa (requiere rol COORDINATOR). */
+export function createCompany(dto: CreateCompanyDto): Promise<Company> {
+  return api<Company>('/companies', {
+    method: 'POST',
+    body: JSON.stringify(dto),
+  })
 }
 
 /** Ofertas de la empresa autenticada, en cualquier estado (DRAFT/PUBLISHED/CLOSED). */
@@ -86,3 +101,21 @@ export function decideApplication(id: number, status: ApplicationDecision): Prom
     body: JSON.stringify({ status }),
   })
 }
+
+export interface Tutor {
+  id: number
+  fullName: string
+  email: string
+}
+
+export function listTutors(): Promise<Tutor[]> {
+  return api<Tutor[]>('/placements/tutors')
+}
+
+export function createPlacement(applicationId: number, tutorId: number): Promise<{ id: number }> {
+  return api<{ id: number }>('/placements', {
+    method: 'POST',
+    body: JSON.stringify({ applicationId, tutorId }),
+  })
+}
+

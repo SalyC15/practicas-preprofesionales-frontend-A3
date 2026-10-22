@@ -53,7 +53,7 @@ export function SyncIndicator() {
         <span className={cn('font-data', pending > 0 && 'font-semibold text-pending')}>
           {pending} pendiente{pending === 1 ? '' : 's'}
         </span>
-        {' · último sync '}
+        {' · última sinc. '}
         <span className="font-data">{formatTime(lastSyncAt)}</span>
       </p>
 

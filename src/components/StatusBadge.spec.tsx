@@ -4,16 +4,30 @@ import { StatusBadge } from './StatusBadge'
 
 describe('StatusBadge', () => {
   it('maps a status from each group to its tone class', () => {
+    const { rerender } = render(<StatusBadge status="APROBADO" />)
+    expect(screen.getByText('APROBADO').className).toContain('text-stamp')
+
+    rerender(<StatusBadge status="ENVIADO" />)
+    expect(screen.getByText('ENVIADO').className).toContain('text-pending')
+
+    rerender(<StatusBadge status="RECHAZADO" />)
+    expect(screen.getByText('RECHAZADO').className).toContain('text-void')
+
+    rerender(<StatusBadge status="OTRO" />)
+    expect(screen.getByText('OTRO').className).toContain('text-inkSoft')
+  })
+
+  it('translates English backend statuses into Spanish', () => {
     const { rerender } = render(<StatusBadge status="APPROVED" />)
-    expect(screen.getByText('APPROVED').className).toContain('text-stamp')
+    expect(screen.getByText('APROBADO')).toBeInTheDocument()
 
     rerender(<StatusBadge status="SUBMITTED" />)
-    expect(screen.getByText('SUBMITTED').className).toContain('text-pending')
+    expect(screen.getByText('ENVIADO')).toBeInTheDocument()
 
     rerender(<StatusBadge status="REJECTED" />)
-    expect(screen.getByText('REJECTED').className).toContain('text-void')
+    expect(screen.getByText('RECHAZADO')).toBeInTheDocument()
 
-    rerender(<StatusBadge status="WHATEVER" />)
-    expect(screen.getByText('WHATEVER').className).toContain('text-inkSoft')
+    rerender(<StatusBadge status="PENDING" />)
+    expect(screen.getByText('PENDIENTE')).toBeInTheDocument()
   })
 })
