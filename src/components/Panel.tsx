@@ -11,7 +11,7 @@ interface PanelProps {
 /** Contenedor blanco de esquinas grandes: la caja base de listados y tablas. */
 export function Panel({ toolbar, children, className }: PanelProps) {
   return (
-    <div className={cn('overflow-hidden rounded-2xl bg-surface', className)}>
+    <div className={cn('overflow-hidden rounded-2xl bg-surface border border-line/80 shadow-xs', className)}>
       {toolbar ? (
         <div className="flex flex-wrap items-center gap-2 border-b border-paperRule px-[18px] py-3.5">
           {toolbar}

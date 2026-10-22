@@ -106,10 +106,15 @@ export function MyStudentsPage() {
               const approvedPct = requiredHours > 0 ? Math.min(100, (approvedHours / requiredHours) * 100) : 0
               return (
                 <div key={placement.id} className={rowClass}>
-                  <span className="text-14 font-semibold text-ink sm:w-32">
-                    Estudiante #{placement.studentId}
+                  <span className="text-14 font-semibold text-ink sm:w-36">
+                    {placement.studentName ?? `Estudiante #${placement.studentId}`}
                   </span>
-                  <span className="flex-1 text-14 text-inkBody">Empresa #{placement.companyId}</span>
+                  <span className="flex-1 text-14 text-inkBody">
+                    {placement.companyName ?? `Empresa #${placement.companyId}`}
+                    {placement.offerTitle ? (
+                      <span className="block font-data text-12 text-inkSoft">{placement.offerTitle}</span>
+                    ) : null}
+                  </span>
                   <span className="flex items-center gap-2.5 sm:w-44">
                     <ProgressBar
                       size="sm"

@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { ApiError } from '@/api/client'
 import { type Offer, listOffers } from '@/api/offers'
+import { useAuth } from '@/auth/AuthContext'
 import { FilterTabs } from '@/components/FilterTabs'
 import { OfferCard, OfferGrid } from '@/components/OfferCard'
 import { PageHeader } from '@/components/PageHeader'
@@ -49,6 +50,9 @@ function OffersToolbar({ modalities, value, onChange, count }: ToolbarProps) {
 }
 
 function OffersList({ offers }: { offers: Offer[] }) {
+  const { role } = useAuth()
+  const isStudent = role === 'STUDENT'
+
   return (
     <OfferGrid>
       {offers.map((offer) => (
@@ -64,9 +68,23 @@ function OffersList({ offers }: { offers: Offer[] }) {
           description={offer.description}
           meta={formatPeriod(offer.periodStart, offer.periodEnd)}
           actions={
-            <Button asChild size="sm">
-              <Link to={`/ofertas/${offer.id}`}>Ver y postular</Link>
-            </Button>
+            <div className="flex items-center gap-2">
+              <Button asChild size="sm" variant={isStudent ? 'default' : 'outline'}>
+                <Link
+                  to={`/ofertas/${offer.id}`}
+                  className={isStudent ? 'text-white hover:text-white' : undefined}
+                >
+                  {isStudent ? 'Ver y postular' : 'Ver detalle'}
+                </Link>
+              </Button>
+              {role === 'COORDINATOR' ? (
+                <Button asChild size="sm">
+                  <Link to={`/ofertas/${offer.id}/postulaciones`}>
+                    Postulaciones
+                  </Link>
+                </Button>
+              ) : null}
+            </div>
           }
         />
       ))}

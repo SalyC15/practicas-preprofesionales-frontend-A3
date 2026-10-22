@@ -13,13 +13,14 @@ export interface AuthUser {
   companyId: number | null
 }
 
-interface AuthContextValue {
+export interface AuthContextValue {
   user: AuthUser | null
   role: Role | null
   sessionMessage: string | null
   expiresAt: number | null
   renewing: boolean
   login: (email: string, password: string) => Promise<void>
+  register: (fullName: string, email: string, password: string) => Promise<void>
   logout: () => Promise<void>
   refresh: () => Promise<void>
 }
@@ -52,7 +53,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     <AuthContext.Provider value={{
       user: state.user, role: state.user?.role ?? null,
       sessionMessage: state.message, expiresAt: state.expiresAt, renewing: state.renewing,
-      login: sessionCoordinator.login, logout, refresh: sessionCoordinator.refresh,
+      login: sessionCoordinator.login, register: sessionCoordinator.register, logout, refresh: sessionCoordinator.refresh,
     }}>
       {children}
     </AuthContext.Provider>

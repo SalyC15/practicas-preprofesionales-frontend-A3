@@ -255,6 +255,21 @@ export class SessionCoordinator {
     if (!this.state.user) throw new Error(EXPIRED_MESSAGE)
   }
 
+  register = async (fullName: string, email: string, password: string) => {
+    void this.clear(null)
+    const fence = this.capture()
+    await this.cleanup
+    this.assertCurrent(fence)
+    if (this.cleanupFailed) throw new Error(CLEANUP_MESSAGE)
+    const result = await this.dependencies.request<SessionResponse>('/auth/register', {
+      method: 'POST', credentials: 'include', signal: fence.signal,
+      body: JSON.stringify({ fullName, email, password }),
+    })
+    this.assertCurrent(fence)
+    this.install({ ...result, revision: crypto.randomUUID() }, true)
+    if (!this.state.user) throw new Error(EXPIRED_MESSAGE)
+  }
+
   refresh = async () => {
     this.checkExpiry()
     if (!this.state.user) throw new Error(EXPIRED_MESSAGE)

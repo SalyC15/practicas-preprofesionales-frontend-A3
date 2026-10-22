@@ -135,3 +135,25 @@ export function getHourLogValidationErrorMessage(
 
   return null
 }
+
+/**
+ * Calcula la cantidad de horas a partir del horario de inicio y fin.
+ * Si las horas son válidas y el horario de inicio es anterior al de fin,
+ * retorna la duración como string numérico limpio (ej. "4", "3.5", "1.75").
+ * Retorna null si el intervalo es incompleto o no válido.
+ */
+export function calculateHoursFromTimes(startTime: string, endTime: string): string | null {
+  if (!startTime || !endTime) return null
+  const [startHour, startMinute] = startTime.split(':').map(Number)
+  const [endHour, endMinute] = endTime.split(':').map(Number)
+  if ([startHour, startMinute, endHour, endMinute].some((value) => Number.isNaN(value))) {
+    return null
+  }
+  const startMinutes = startHour * 60 + startMinute
+  const endMinutes = endHour * 60 + endMinute
+  const diffMinutes = endMinutes - startMinutes
+  if (diffMinutes <= 0) return null
+  const diffHours = diffMinutes / 60
+  const formatted = Number(diffHours.toFixed(2))
+  return String(formatted)
+}
