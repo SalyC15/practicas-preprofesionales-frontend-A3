@@ -120,7 +120,7 @@ export function LoginPage() {
         <div className="rounded-3xl border border-line/90 bg-surface/95 p-6 shadow-[0_20px_50px_rgba(14,58,107,0.07)] backdrop-blur-md sm:p-8">
           <div className="border-b border-paperRule pb-4">
             <h1 className="font-display text-22 font-bold tracking-tight text-ink">
-              {mode === 'register' ? 'Registrate como estudiante' : 'Entrá a tu cuenta'}
+              {mode === 'register' ? 'Registrate como estudiante' : 'Ingresa a tu cuenta'}
             </h1>
             <p className="mt-0.5 text-13 text-inkMid">
               {mode === 'register'
@@ -306,7 +306,7 @@ export function LoginPage() {
           <div className="mt-5 border-t border-line/70 pt-4 text-center text-13 text-inkMid">
             {mode === 'login' ? (
               <p>
-                ¿Sos estudiante y todavía no tenés cuenta?{' '}
+                ¿Eres estudiante y todavía no tienes cuenta?{' '}
                 <button
                   type="button"
                   onClick={() => {
@@ -315,12 +315,12 @@ export function LoginPage() {
                   }}
                   className="font-semibold text-stamp hover:underline"
                 >
-                  Registrate acá
+                  Regístrate aqui
                 </button>
               </p>
             ) : (
               <p>
-                ¿Ya tenés una cuenta registrada?{' '}
+                ¿Ya tienes una cuenta registrada?{' '}
                 <button
                   type="button"
                   onClick={() => {
@@ -329,7 +329,7 @@ export function LoginPage() {
                   }}
                   className="font-semibold text-stamp hover:underline"
                 >
-                  Iniciá sesión
+                  Inicia sesión
                 </button>
               </p>
             )}

@@ -1,5 +1,11 @@
 import { type FormEvent, useEffect, useMemo, useState } from 'react'
-import { type Company, type CreateCompanyDto, createCompany, listCompanies } from '@/api/companies'
+import {
+  type Company,
+  type CreateCompanyDto,
+  createCompany,
+  listCompanies,
+  verifyCompany,
+} from '@/api/companies'
 import { ApiError } from '@/api/client'
 import { useAuth } from '@/auth/AuthContext'
 import { PageHeader } from '@/components/PageHeader'
@@ -20,31 +26,75 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Ledger } from '@/components/ledger/Ledger'
 import { plural } from '@/lib/utils'
+import { CheckCircle2, Eye, EyeOff, Loader2, Lock, ShieldCheck } from 'lucide-react'
 
-function ColumnHeader() {
+function ColumnHeader({ isCoordinator }: { isCoordinator: boolean }) {
   return (
     <TableHeaderRow>
-      <span className="w-56">Empresa</span>
+      <span className="w-52">Empresa</span>
       <span className="w-36 font-data text-12">RUC / Identificación</span>
-      <span className="w-36">Sector</span>
+      <span className="w-32">Sector</span>
       <span className="flex-1">Contacto RRHH</span>
-      <span className="w-32 text-right">Estado</span>
+      <span className="w-32 text-center">Estado</span>
+      {isCoordinator && <span className="w-28 text-right">Validación</span>}
     </TableHeaderRow>
   )
 }
 
-function CompanyRowItem({ company }: { company: Company }) {
+interface CompanyRowItemProps {
+  company: Company
+  isCoordinator: boolean
+  onToggleVerify?: (id: number, verified: boolean) => void
+  isVerifying?: boolean
+}
+
+function CompanyRowItem({ company, isCoordinator, onToggleVerify, isVerifying }: CompanyRowItemProps) {
   return (
     <div className={rowClass}>
-      <div className="flex flex-col sm:w-56">
+      <div className="flex flex-col sm:w-52">
         <span className="text-14 font-semibold text-ink">{company.name}</span>
       </div>
       <span className="font-data text-13 text-inkSoft sm:w-36">{company.taxId}</span>
-      <span className="text-13 text-inkMid sm:w-36">{company.sector}</span>
+      <span className="text-13 text-inkMid sm:w-32">{company.sector}</span>
       <span className="flex-1 text-13 text-inkSoft truncate">{company.contactEmail}</span>
-      <div className="flex justify-end sm:w-32">
+      <div className="flex justify-center sm:w-32">
         <StatusBadge status={company.verified ? 'VERIFICADA' : 'PENDIENTE'} />
       </div>
+      {isCoordinator && (
+        <div className="flex justify-end sm:w-28">
+          {company.verified ? (
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              disabled={isVerifying}
+              onClick={() => onToggleVerify?.(company.id, false)}
+              className="h-7 text-11 text-inkMid hover:border-void/40 hover:text-void"
+              title="Revocar validación"
+            >
+              {isVerifying ? <Loader2 className="size-3 animate-spin" /> : 'Revocar'}
+            </Button>
+          ) : (
+            <Button
+              type="button"
+              size="sm"
+              disabled={isVerifying}
+              onClick={() => onToggleVerify?.(company.id, true)}
+              className="h-7 gap-1 bg-emerald-600 px-2.5 text-11 font-medium text-white shadow-xs hover:bg-emerald-700"
+              title="Acreditar y validar empresa institucionalmente"
+            >
+              {isVerifying ? (
+                <Loader2 className="size-3 animate-spin" />
+              ) : (
+                <>
+                  <ShieldCheck className="size-3.5" />
+                  Validar
+                </>
+              )}
+            </Button>
+          )}
+        </div>
+      )}
     </div>
   )
 }
@@ -52,7 +102,7 @@ function CompanyRowItem({ company }: { company: Company }) {
 interface RegisterCompanyModalProps {
   open: boolean
   onClose: () => void
-  onCreated: (company: Company) => void
+  onCreated: (company: Company, defaultPasswordUsed: string) => void
 }
 
 function RegisterCompanyModal({ open, onClose, onCreated }: RegisterCompanyModalProps) {
@@ -61,11 +111,14 @@ function RegisterCompanyModal({ open, onClose, onCreated }: RegisterCompanyModal
     name: '',
     sector: '',
     contactEmail: '',
+    password: '',
+    verified: true,
   })
+  const [showPassword, setShowPassword] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [submitting, setSubmitting] = useState(false)
 
-  function handleChange(field: keyof CreateCompanyDto, value: string) {
+  function handleChange<K extends keyof CreateCompanyDto>(field: K, value: CreateCompanyDto[K]) {
     setForm((prev) => ({ ...prev, [field]: value }))
   }
 
@@ -74,20 +127,29 @@ function RegisterCompanyModal({ open, onClose, onCreated }: RegisterCompanyModal
     setError(null)
 
     if (!form.taxId.trim() || !form.name.trim() || !form.sector.trim() || !form.contactEmail.trim()) {
-      setError('Todos los campos son obligatorios.')
+      setError('RUC, nombre, sector y correo de contacto son campos obligatorios.')
+      return
+    }
+
+    if (form.password && form.password.trim().length > 0 && form.password.trim().length < 6) {
+      setError('La contraseña de acceso debe tener al menos 6 caracteres.')
       return
     }
 
     setSubmitting(true)
+    const usedPassword = form.password?.trim() || 'yura1234'
+
     try {
       const created = await createCompany({
         taxId: form.taxId.trim(),
         name: form.name.trim(),
         sector: form.sector.trim(),
         contactEmail: form.contactEmail.trim(),
+        password: usedPassword,
+        verified: form.verified ?? true,
       })
-      onCreated(created)
-      setForm({ taxId: '', name: '', sector: '', contactEmail: '' })
+      onCreated(created, usedPassword)
+      setForm({ taxId: '', name: '', sector: '', contactEmail: '', password: '', verified: true })
       onClose()
     } catch (err) {
       setError(err instanceof ApiError ? err.message : 'No se pudo registrar la empresa')
@@ -98,11 +160,11 @@ function RegisterCompanyModal({ open, onClose, onCreated }: RegisterCompanyModal
 
   return (
     <Dialog open={open} onOpenChange={(isOpen) => !isOpen && onClose()}>
-      <DialogContent className="max-w-[500px]">
+      <DialogContent className="max-w-[520px]">
         <DialogHeader>
           <DialogTitle>Registrar nueva empresa</DialogTitle>
           <DialogDescription>
-            Agregá una contraparte empresarial para que pueda publicar ofertas de prácticas.
+            Agregá una contraparte institucional. Se creará automáticamente la cuenta de acceso para que la empresa pueda iniciar sesión.
           </DialogDescription>
         </DialogHeader>
         <form onSubmit={handleSubmit} noValidate>
@@ -112,8 +174,9 @@ function RegisterCompanyModal({ open, onClose, onCreated }: RegisterCompanyModal
                 {error}
               </p>
             )}
+
             <div className="flex flex-col gap-1.5">
-              <Label htmlFor="company-name">Razón social o Nombre</Label>
+              <Label htmlFor="company-name">Razón social o Nombre *</Label>
               <Input
                 id="company-name"
                 value={form.name}
@@ -122,8 +185,9 @@ function RegisterCompanyModal({ open, onClose, onCreated }: RegisterCompanyModal
                 required
               />
             </div>
+
             <div className="flex flex-col gap-1.5">
-              <Label htmlFor="company-taxId">RUC / Identificación tributaria</Label>
+              <Label htmlFor="company-taxId">RUC / Identificación tributaria *</Label>
               <Input
                 id="company-taxId"
                 value={form.taxId}
@@ -132,18 +196,20 @@ function RegisterCompanyModal({ open, onClose, onCreated }: RegisterCompanyModal
                 required
               />
             </div>
+
             <div className="flex flex-col gap-1.5">
-              <Label htmlFor="company-sector">Sector económico</Label>
+              <Label htmlFor="company-sector">Sector económico *</Label>
               <Input
                 id="company-sector"
                 value={form.sector}
                 onChange={(e) => handleChange('sector', e.target.value)}
-                placeholder="Ej. Software, Salud, Manufactura, Agro"
+                placeholder="Ej. Software, Finanzas, Salud"
                 required
               />
             </div>
+
             <div className="flex flex-col gap-1.5">
-              <Label htmlFor="company-email">Correo de contacto (RRHH / Vinculación)</Label>
+              <Label htmlFor="company-email">Correo de contacto institucional y login *</Label>
               <Input
                 id="company-email"
                 type="email"
@@ -152,6 +218,50 @@ function RegisterCompanyModal({ open, onClose, onCreated }: RegisterCompanyModal
                 placeholder="rrhh@empresa.com"
                 required
               />
+              <p className="text-11 text-inkSoft">
+                Este correo servirá como usuario para que la empresa inicie sesión en la plataforma.
+              </p>
+            </div>
+
+            <div className="flex flex-col gap-1.5 rounded-xl border border-line bg-paper/60 p-3">
+              <div className="flex items-center justify-between">
+                <Label htmlFor="company-password" className="flex items-center gap-1.5 text-13 font-semibold text-ink">
+                  <Lock className="size-3.5 text-stamp" />
+                  Contraseña de acceso inicial
+                </Label>
+                <button
+                  type="button"
+                  onClick={() => setShowPassword(!showPassword)}
+                  className="flex items-center gap-1 text-12 text-inkMid hover:text-ink"
+                >
+                  {showPassword ? <EyeOff className="size-3.5" /> : <Eye className="size-3.5" />}
+                  {showPassword ? 'Ocultar' : 'Ver'}
+                </button>
+              </div>
+              <Input
+                id="company-password"
+                type={showPassword ? 'text' : 'password'}
+                value={form.password || ''}
+                onChange={(e) => handleChange('password', e.target.value)}
+                placeholder="Por defecto: yura1234"
+                className="mt-1 bg-surface"
+              />
+              <p className="text-11 text-inkMid">
+                Podés ingresar una contraseña personalizada (mínimo 6 caracteres) o dejarla en blanco para asignar <code className="rounded bg-muted px-1 py-0.5 font-mono text-11">yura1234</code> por defecto.
+              </p>
+            </div>
+
+            <div className="mt-1 flex items-center gap-2">
+              <input
+                id="company-verified"
+                type="checkbox"
+                checked={form.verified ?? true}
+                onChange={(e) => handleChange('verified', e.target.checked)}
+                className="size-4 rounded border-line text-stamp focus:ring-stamp/20"
+              />
+              <Label htmlFor="company-verified" className="cursor-pointer text-13 font-normal text-ink">
+                Acreditar y validar empresa inmediatamente al crearla
+              </Label>
             </div>
           </DialogBody>
           <DialogFooter>
@@ -159,7 +269,7 @@ function RegisterCompanyModal({ open, onClose, onCreated }: RegisterCompanyModal
               Cancelar
             </Button>
             <Button type="submit" disabled={submitting}>
-              {submitting ? 'Guardando…' : 'Registrar empresa'}
+              {submitting ? 'Guardando…' : 'Registrar empresa y crear cuenta'}
             </Button>
           </DialogFooter>
         </form>
@@ -172,8 +282,10 @@ export function CompaniesPage() {
   const { role } = useAuth()
   const [companies, setCompanies] = useState<Company[] | undefined>(undefined)
   const [error, setError] = useState<string | null>(null)
+  const [successNotice, setSuccessNotice] = useState<string | null>(null)
   const [search, setSearch] = useState('')
   const [modalOpen, setModalOpen] = useState(false)
+  const [verifyingId, setVerifyingId] = useState<number | null>(null)
 
   const isCoordinator = role === 'COORDINATOR'
 
@@ -192,8 +304,28 @@ export function CompaniesPage() {
     }
   }, [])
 
-  function handleCompanyCreated(newCompany: Company) {
+  function handleCompanyCreated(newCompany: Company, defaultPasswordUsed: string) {
     setCompanies((prev) => (prev ? [newCompany, ...prev] : [newCompany]))
+    setSuccessNotice(
+      `¡Empresa "${newCompany.name}" registrada con éxito! Credenciales de acceso generadas: Correo: ${newCompany.contactEmail} · Contraseña: ${defaultPasswordUsed}`,
+    )
+  }
+
+  async function handleToggleVerify(companyId: number, nextStatus: boolean) {
+    setVerifyingId(companyId)
+    setError(null)
+    try {
+      const updated = await verifyCompany(companyId, nextStatus)
+      setCompanies((prev) =>
+        prev ? prev.map((c) => (c.id === companyId ? { ...c, verified: updated.verified } : c)) : prev,
+      )
+    } catch (err) {
+      setError(
+        err instanceof ApiError ? err.message : 'No se pudo actualizar el estado de validación de la empresa',
+      )
+    } finally {
+      setVerifyingId(null)
+    }
   }
 
   const filteredCompanies = useMemo(() => {
@@ -224,6 +356,22 @@ export function CompaniesPage() {
           </Button>
         )}
       </div>
+
+      {successNotice ? (
+        <div className="flex items-center justify-between rounded-xl border border-emerald-500/30 bg-emerald-50/90 p-4 text-emerald-900 shadow-xs">
+          <div className="flex items-center gap-3">
+            <CheckCircle2 className="size-5 shrink-0 text-emerald-600" />
+            <p className="text-13 font-medium">{successNotice}</p>
+          </div>
+          <button
+            type="button"
+            onClick={() => setSuccessNotice(null)}
+            className="text-12 font-medium text-emerald-700 hover:underline"
+          >
+            Cerrar
+          </button>
+        </div>
+      ) : null}
 
       {companies && (
         <StatGrid>
@@ -271,9 +419,15 @@ export function CompaniesPage() {
       >
         {(items) => (
           <Panel>
-            <Ledger header={<ColumnHeader />}>
+            <Ledger header={<ColumnHeader isCoordinator={isCoordinator} />}>
               {items.map((company) => (
-                <CompanyRowItem key={company.id} company={company} />
+                <CompanyRowItem
+                  key={company.id}
+                  company={company}
+                  isCoordinator={isCoordinator}
+                  onToggleVerify={handleToggleVerify}
+                  isVerifying={verifyingId === company.id}
+                />
               ))}
             </Ledger>
           </Panel>

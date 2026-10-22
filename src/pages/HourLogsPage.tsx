@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { HourLogForm } from '@/components/HourLogForm'
 import { HoursProgressPanel } from '@/components/HoursProgressPanel'
 import { PageHeader } from '@/components/PageHeader'
-import { EmptyState, LoadingState, Panel } from '@/components/Panel'
+import { EmptyState, LoadingState, Section } from '@/components/Panel'
 import { ScheduleAttendancePanel } from '@/components/ScheduleAttendancePanel'
 import { StatusBadge } from '@/components/StatusBadge'
 import { Button } from '@/components/ui/button'
@@ -170,16 +170,16 @@ export function HourLogsPage() {
         />
       ) : null}
 
-      <Panel
+      <Section
         title="Historial de horas registradas"
-        toolbar={
-          <span className="ml-auto font-data text-12 text-inkSoft">
+        aside={
+          <span className="font-data text-12 text-inkSoft">
             {plural(logs.length, 'registro', 'registros')}
           </span>
         }
       >
         <HourLogsList logs={logs} />
-      </Panel>
+      </Section>
     </div>
   )
 }

@@ -51,7 +51,16 @@ const NAV_BY_ROLE: Record<Role, NavGroup[]> = {
       ],
     },
   ],
-  COMPANY: [{ title: 'Reclutamiento', items: [{ path: '/ofertas-empresa', label: 'Mis ofertas' }] }],
+  COMPANY: [
+    {
+      title: 'Reclutamiento',
+      items: [{ path: '/ofertas-empresa', label: 'Mis ofertas' }],
+    },
+    {
+      title: 'Configuración',
+      items: [{ path: '/perfil-empresa', label: 'Perfil de empresa' }],
+    },
+  ],
   COORDINATOR: [
     {
       title: 'Gestión',

@@ -4,10 +4,13 @@ import {
   closeOffer,
   createOffer,
   decideApplication,
+  getMyCompany,
   listApplicationsForOffer,
   listCompanies,
   listMyOffers,
   publishOffer,
+  updateMyCompany,
+  verifyCompany,
 } from './companies'
 
 vi.mock('./client', async (importOriginal) => {
@@ -76,5 +79,33 @@ describe('companies api', () => {
   it('propagates ApiError from the client', async () => {
     vi.mocked(api).mockRejectedValue(new ApiError(400, 'la oferta ya no tiene cupos'))
     await expect(decideApplication(9, 'ACCEPTED')).rejects.toBeInstanceOf(ApiError)
+  })
+
+  it('retrieves the authenticated company profile via GET /companies/me', async () => {
+    vi.mocked(api).mockResolvedValue({ id: 2, name: 'Empresa Test', verified: true } as never)
+    const result = await getMyCompany()
+    expect(api).toHaveBeenCalledWith('/companies/me')
+    expect(result.name).toBe('Empresa Test')
+  })
+
+  it('updates the authenticated company profile via PATCH /companies/me with dto', async () => {
+    const dto = { phone: '0999999999', address: 'Quito, Ecuador', website: 'https://test.com' }
+    vi.mocked(api).mockResolvedValue({ id: 2, name: 'Empresa Test', ...dto } as never)
+    const result = await updateMyCompany(dto)
+    expect(api).toHaveBeenCalledWith('/companies/me', {
+      method: 'PATCH',
+      body: JSON.stringify(dto),
+    })
+    expect(result.phone).toBe('0999999999')
+  })
+
+  it('updates company verification state via PATCH /companies/:id/verify', async () => {
+    vi.mocked(api).mockResolvedValue({ id: 5, name: 'Empresa Test', verified: true } as never)
+    const result = await verifyCompany(5, true)
+    expect(api).toHaveBeenCalledWith('/companies/5/verify', {
+      method: 'PATCH',
+      body: JSON.stringify({ verified: true }),
+    })
+    expect(result.verified).toBe(true)
   })
 })

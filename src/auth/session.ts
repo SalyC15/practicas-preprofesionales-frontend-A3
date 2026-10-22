@@ -6,8 +6,8 @@ import type { AuthUser } from './AuthContext'
 
 const SESSION_KEY = 'auth_session'
 const CLEANUP_KEY = 'auth_cleanup_pending'
-const EXPIRED_MESSAGE = 'Tu sesión expiró. Volvé a iniciar sesión para continuar.'
-const CLEANUP_MESSAGE = 'No se pudieron borrar los datos locales. Intentá iniciar sesión de nuevo.'
+const EXPIRED_MESSAGE = 'Tu sesión expiró. Vuelve a iniciar sesión para continuar.'
+const CLEANUP_MESSAGE = 'No se pudieron borrar los datos locales. Intenta iniciar sesión de nuevo.'
 const MAX_TIMER = 2_147_483_647
 
 export interface SessionResponse {
@@ -124,7 +124,7 @@ export class SessionCoordinator {
     this.generation++
   }
   private assertCurrent(fence: SessionFence) {
-    if (!this.isCurrent(fence)) throw new Error('La sesión cambió. Volvé a intentarlo.')
+    if (!this.isCurrent(fence)) throw new Error('La sesión cambió. Vuelve a intentarlo.')
   }
   private queuePurge(): Promise<void> {
     localStorage.setItem(CLEANUP_KEY, 'true')
@@ -219,7 +219,7 @@ export class SessionCoordinator {
     // Read latest bytes rather than an obsolete queued event's newValue.
     const stored = localStorage.getItem(SESSION_KEY) ? readStored() : null
     if (!stored) {
-      void this.clear(readSignoutMessage() ?? 'La sesión se cerró en otra pestaña. Volvé a iniciar sesión.', false)
+      void this.clear(readSignoutMessage() ?? 'La sesión se cerró en otra pestaña. Vuelve a iniciar sesión.', false)
       return
     }
     if (stored.revision === this.revision) return
