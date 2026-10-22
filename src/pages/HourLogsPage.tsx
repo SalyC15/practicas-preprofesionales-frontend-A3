@@ -13,7 +13,6 @@ import {
   DialogDescription,
   DialogHeader,
   DialogTitle,
-  DialogTrigger,
 } from '@/components/ui/dialog'
 import { Ledger, LedgerHeaderRow } from '@/components/ledger/Ledger'
 import { LedgerRow } from '@/components/ledger/LedgerRow'
@@ -167,17 +166,18 @@ export function HourLogsPage() {
         <ScheduleAttendancePanel
           summary={scheduleSummary}
           companyName={placement.companyName}
-          offerTitle={placement.offerTitle}
           onConfirmAttendance={handleConfirmAttendance}
         />
       ) : null}
 
       <Panel
-        title="Historial de horas registradas"
         toolbar={
-          <span className="ml-auto font-data text-12 text-inkSoft">
-            {plural(logs.length, 'registro', 'registros')}
-          </span>
+          <>
+            <h2 className="font-display text-15 font-semibold text-ink">Historial de horas registradas</h2>
+            <span className="ml-auto font-data text-12 text-inkSoft">
+              {plural(logs.length, 'registro', 'registros')}
+            </span>
+          </>
         }
       >
         <HourLogsList logs={logs} />
