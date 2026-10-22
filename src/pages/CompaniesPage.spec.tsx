@@ -14,7 +14,7 @@ vi.mock('@/api/companies', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@/api/companies')>()
   return {
     ...actual,
-    listCompanies: vi.fn(),
+    listCompaniesPage: vi.fn(),
     createCompany: vi.fn(),
     verifyCompany: vi.fn(),
   }
@@ -43,7 +43,10 @@ describe('CompaniesPage', () => {
   ]
 
   beforeEach(() => {
-    vi.mocked(companiesApi.listCompanies).mockResolvedValue(mockCompanies)
+    vi.mocked(companiesApi.listCompaniesPage).mockResolvedValue({
+      items: mockCompanies, total: 2, page: 1, pageSize: 25, totalPages: 1,
+      summary: { registered: 2, verified: 1, sectors: 2 },
+    })
     vi.mocked(companiesApi.verifyCompany).mockImplementation(async (id, verified) => {
       const found = mockCompanies.find((c) => c.id === id)
       return { ...found!, verified }
@@ -72,6 +75,19 @@ describe('CompaniesPage', () => {
     expect(screen.getByText('Empresa Aprobada')).toBeInTheDocument()
     expect(screen.getByText('Validar')).toBeInTheDocument()
     expect(screen.getByText('Revocar')).toBeInTheDocument()
+  })
+
+  it('requests a new server page and resets to page one when searching', async () => {
+    vi.mocked(companiesApi.listCompaniesPage).mockImplementation(async (page, pageSize) => ({
+      items: mockCompanies, total: 10000, page, pageSize, totalPages: 400,
+      summary: { registered: 10000, verified: 5000, sectors: 2 },
+    }))
+    render(<CompaniesPage />)
+    await screen.findByText('Empresa Pendiente')
+    fireEvent.click(screen.getByRole('button', { name: 'Siguiente' }))
+    await waitFor(() => expect(companiesApi.listCompaniesPage).toHaveBeenCalledWith(2, 25, ''))
+    fireEvent.change(screen.getByPlaceholderText('Buscar por nombre, sector o RUC…'), { target: { value: 'Finanzas' } })
+    await waitFor(() => expect(companiesApi.listCompaniesPage).toHaveBeenCalledWith(1, 25, 'Finanzas'))
   })
 
   it('allows coordinator to validate a pending company', async () => {

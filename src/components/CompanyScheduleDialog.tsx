@@ -1,3 +1,4 @@
+import { usePageState } from '@/components/usePageState'
 import { useState } from 'react'
 import { Calendar, ChevronDown, ChevronUp, Sparkles } from 'lucide-react'
 import {
@@ -54,6 +55,7 @@ export function CompanyScheduleDialog({
   endTime = '12:00',
   activity,
 }: CompanyScheduleDialogProps) {
+  const pager = usePageState()
   const [showAllSessions, setShowAllSessions] = useState(false)
 
   // Crear un mock placement representativo para alimentar el generador
@@ -187,7 +189,7 @@ export function CompanyScheduleDialog({
 
               <div className="max-h-[280px] overflow-y-auto rounded-lg border border-divider/60 bg-white">
                 <ul className="divide-y divide-divider/40">
-                  {visibleSessions.map((session) => (
+                  {visibleSessions.slice(pager.offset, pager.offset + pager.pageSize).map((session) => (
                     <li
                       key={session.date}
                       className="flex items-center justify-between gap-3 px-3 py-2 text-12 hover:bg-soft/50 transition-colors"
@@ -225,7 +227,7 @@ export function CompanyScheduleDialog({
                   variant="ghost"
                   size="sm"
                   className="self-center text-12 text-stamp"
-                  onClick={() => setShowAllSessions((prev) => !prev)}
+                  onClick={() => { setShowAllSessions((prev) => !prev); pager.setPage(1) }}
                 >
                   {showAllSessions ? (
                     <>
@@ -244,6 +246,7 @@ export function CompanyScheduleDialog({
           </div>
         </DialogBody>
 
+        {pager.controls(visibleSessions.length)}
         <DialogFooter>
           <Button type="button" onClick={() => onOpenChange(false)}>
             Entendido
@@ -253,3 +256,5 @@ export function CompanyScheduleDialog({
     </Dialog>
   )
 }
+
+

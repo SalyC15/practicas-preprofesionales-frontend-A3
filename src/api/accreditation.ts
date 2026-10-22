@@ -1,4 +1,12 @@
 import { api } from './client'
+import { type Page, pageQuery } from './pagination'
+
+export interface AccreditationPage extends Page<AccreditationRow> {
+  summary: { accredited: number; observations: number; pending: number; notAccredited: number }
+}
+export function reportPage(period: string, page: number, size: number): Promise<AccreditationPage> {
+  return api(`/placements/accreditation/paged?${pageQuery(page, size, { period })}`)
+}
 
 export type AccreditationLevel = 'ACREDITADO' | 'ACREDITADO_CON_OBSERVACIONES' | 'PENDIENTE' | 'NO_ACREDITADO'
 

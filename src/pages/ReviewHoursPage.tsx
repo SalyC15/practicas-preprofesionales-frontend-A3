@@ -1,3 +1,5 @@
+import { useHourLedger } from '@/offline/hooks/useHourLedger'
+import { usePageState } from '@/components/usePageState'
 import { type FormEvent, useState } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { Link, useParams } from 'react-router-dom'
@@ -21,7 +23,7 @@ import { Textarea } from '@/components/ui/textarea'
 import { Ledger, LedgerHeaderRow } from '@/components/ledger/Ledger'
 import { LedgerRow } from '@/components/ledger/LedgerRow'
 import { parseLocalDate } from '@/lib/date'
-import { summarizeHours } from '@/lib/hours'
+
 import { plural } from '@/lib/utils'
 import { db, type LocalHourLog, type LocalPlacement } from '@/offline/db'
 import { syncNow } from '@/offline/sync/scheduler'
@@ -96,7 +98,7 @@ function ReviewList({ logs, actionState, onApprove, onReject }: ReviewListProps)
     return (
       <EmptyState
         title="No tienes horas pendientes de revisar"
-        description="Cuando tu practicante envíe horas nuevas, aparecen acá."
+        description="Cuando tu practicante envíe horas nuevas, aparecen aquí."
       />
     )
   }
@@ -255,10 +257,9 @@ export function ReviewHoursPage() {
     return found ?? null
   }, [placementId])
 
-  const logs = useLiveQuery<LocalHourLog[] | undefined>(
-    () => db.hourLogs.where('placementId').equals(placementId).sortBy('date'),
-    [placementId],
-  )
+  const pager = usePageState('Paginación de revisión de horas')
+  const ledger = useHourLedger(placement, pager.page, pager.pageSize)
+  const logs = ledger?.items
 
   const [actionState, setActionState] = useState<Record<number, ActionState>>({})
   const [reviewError, setReviewError] = useState<string | null>(null)
@@ -285,7 +286,7 @@ export function ReviewHoursPage() {
     void reviewLog(logId, 'REJECTED', note)
   }
 
-  if (placement === undefined || logs === undefined) {
+  if (placement === undefined) {
     return <LoadingState>Cargando libro de horas…</LoadingState>
   }
 
@@ -293,8 +294,10 @@ export function ReviewHoursPage() {
     return <EmptyState title="No se encontró este practicante" />
   }
 
-  const hours = summarizeHours(logs, placement.requiredHours)
-  const pendingCount = logs.filter((log) => log.status === 'SUBMITTED').length
+  if (!ledger || !logs) return <LoadingState>Cargando libro de horas…</LoadingState>
+
+  const hours = ledger.hours
+  const pendingCount = ledger.pendingCount
 
   return (
     <>
@@ -336,6 +339,7 @@ export function ReviewHoursPage() {
         />
       </Panel>
 
+      {pager.controls(ledger.total)}
       <RejectDialog
         log={rejectingLog}
         onCancel={() => setRejectingLog(null)}

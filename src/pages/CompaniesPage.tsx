@@ -1,9 +1,11 @@
-import { type FormEvent, useEffect, useMemo, useState } from 'react'
+import { Pagination } from '@/components/Pagination'
+import { type FormEvent, useEffect, useState } from 'react'
 import {
   type Company,
   type CreateCompanyDto,
   createCompany,
-  listCompanies,
+  listCompaniesPage,
+  type CompanyPage,
   verifyCompany,
 } from '@/api/companies'
 import { ApiError } from '@/api/client'
@@ -247,7 +249,7 @@ function RegisterCompanyModal({ open, onClose, onCreated }: RegisterCompanyModal
                 className="mt-1 bg-surface"
               />
               <p className="text-11 text-inkMid">
-                Podés ingresar una contraseña personalizada (mínimo 6 caracteres) o dejarla en blanco para asignar <code className="rounded bg-muted px-1 py-0.5 font-mono text-11">yura1234</code> por defecto.
+                Puedes ingresar una contraseña personalizada (mínimo 6 caracteres) o dejarla en blanco para asignar <code className="rounded bg-muted px-1 py-0.5 font-mono text-11">yura1234</code> por defecto.
               </p>
             </div>
 
@@ -284,6 +286,10 @@ export function CompaniesPage() {
   const [error, setError] = useState<string | null>(null)
   const [successNotice, setSuccessNotice] = useState<string | null>(null)
   const [search, setSearch] = useState('')
+  const [page, setPage] = useState(1)
+  const [pageSize, setPageSize] = useState(25)
+  const [result, setResult] = useState<CompanyPage>()
+  const [revision, setRevision] = useState(0)
   const [modalOpen, setModalOpen] = useState(false)
   const [verifyingId, setVerifyingId] = useState<number | null>(null)
 
@@ -292,20 +298,29 @@ export function CompaniesPage() {
   useEffect(() => {
     let cancelled = false
     setError(null)
-    listCompanies()
+    setCompanies(undefined)
+    const timer = window.setTimeout(() => {
+    listCompaniesPage(page, pageSize, search)
       .then((data) => {
-        if (!cancelled) setCompanies(data)
+        if (cancelled) return
+        const lastPage = Math.max(1, data.totalPages)
+        if (page > lastPage) { setPage(lastPage); return }
+        setResult(data)
+        setCompanies(data.items)
       })
       .catch((err) => {
         if (!cancelled) setError(err instanceof ApiError ? err.message : 'No se pudieron cargar las empresas')
       })
+    }, 250)
     return () => {
       cancelled = true
+      window.clearTimeout(timer)
     }
-  }, [])
+  }, [page, pageSize, search, revision])
 
   function handleCompanyCreated(newCompany: Company, defaultPasswordUsed: string) {
-    setCompanies((prev) => (prev ? [newCompany, ...prev] : [newCompany]))
+    setPage(1)
+    setRevision((value) => value + 1)
     setSuccessNotice(
       `¡Empresa "${newCompany.name}" registrada con éxito! Credenciales de acceso generadas: Correo: ${newCompany.contactEmail} · Contraseña: ${defaultPasswordUsed}`,
     )
@@ -315,10 +330,8 @@ export function CompaniesPage() {
     setVerifyingId(companyId)
     setError(null)
     try {
-      const updated = await verifyCompany(companyId, nextStatus)
-      setCompanies((prev) =>
-        prev ? prev.map((c) => (c.id === companyId ? { ...c, verified: updated.verified } : c)) : prev,
-      )
+      await verifyCompany(companyId, nextStatus)
+      setRevision((value) => value + 1)
     } catch (err) {
       setError(
         err instanceof ApiError ? err.message : 'No se pudo actualizar el estado de validación de la empresa',
@@ -328,20 +341,6 @@ export function CompaniesPage() {
     }
   }
 
-  const filteredCompanies = useMemo(() => {
-    if (!companies) return undefined
-    if (!search.trim()) return companies
-    const term = search.toLowerCase().trim()
-    return companies.filter(
-      (c) =>
-        c.name.toLowerCase().includes(term) ||
-        c.sector.toLowerCase().includes(term) ||
-        c.taxId.includes(term),
-    )
-  }, [companies, search])
-
-  const verifiedCount = companies?.filter((c) => c.verified).length ?? 0
-  const sectorsCount = new Set(companies?.map((c) => c.sector) ?? []).size
 
   return (
     <>
@@ -373,18 +372,18 @@ export function CompaniesPage() {
         </div>
       ) : null}
 
-      {companies && (
+      {result && (
         <StatGrid>
-          <StatCard label="Empresas registradas" value={String(companies.length)} note="en total" />
+          <StatCard label="Empresas registradas" value={String(result.summary.registered)} note="en total" />
           <StatCard
             label="Empresas verificadas"
-            value={String(verifiedCount)}
-            note={`de ${companies.length}`}
+            value={String(result.summary.verified)}
+            note={`de ${result.summary.registered}`}
             noteTone="stamp"
           />
           <StatCard
             label="Sectores activos"
-            value={String(sectorsCount)}
+            value={String(result.summary.sectors)}
             note="diversidad productiva"
           />
         </StatGrid>
@@ -394,26 +393,26 @@ export function CompaniesPage() {
         <div className="w-full max-w-xs">
           <Input
             value={search}
-            onChange={(e) => setSearch(e.target.value)}
+            onChange={(e) => { setSearch(e.target.value); setPage(1) }}
             placeholder="Buscar por nombre, sector o RUC…"
             className="h-control"
           />
         </div>
-        {filteredCompanies && (
+        {result && (
           <span className="ml-auto font-data text-12 text-inkSoft">
-            {plural(filteredCompanies.length, 'empresa encontrada', 'empresas encontradas')}
+            {plural(result.total, 'empresa encontrada', 'empresas encontradas')}
           </span>
         )}
       </div>
 
       <AsyncSection
         error={error}
-        data={filteredCompanies}
+        data={companies}
         loadingLabel="Cargando empresas…"
         empty={
           <EmptyState
             title="No se encontraron empresas"
-            description="Verificá el filtro de búsqueda o registrá una nueva empresa."
+            description="Verifica el filtro de búsqueda o registra una nueva empresa."
           />
         }
       >
@@ -433,6 +432,9 @@ export function CompaniesPage() {
           </Panel>
         )}
       </AsyncSection>
+
+      {result && !error && <Pagination page={page} pageSize={pageSize} total={result.total} busy={companies === undefined}
+        onPageChange={setPage} onPageSizeChange={(size) => { setPageSize(size); setPage(1) }} />}
 
       <RegisterCompanyModal
         open={modalOpen}

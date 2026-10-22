@@ -1,10 +1,10 @@
 import { type FormEvent, useEffect, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
-import { type Application, apply, listMine } from '@/api/applications'
+import { type Application, apply, getMineForOffer } from '@/api/applications'
 import { ApiError } from '@/api/client'
 import { type Offer, getOffer } from '@/api/offers'
 import { useAuth } from '@/auth/AuthContext'
-import { Tag } from '@/components/Chip'
+import { Chip, Tag } from '@/components/Chip'
 import { PageHeader } from '@/components/PageHeader'
 import { LoadingState, Panel, Section } from '@/components/Panel'
 import { StatusBadge } from '@/components/StatusBadge'
@@ -12,7 +12,7 @@ import { Button } from '@/components/ui/button'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { parseLocalDate } from '@/lib/date'
-import { plural } from '@/lib/utils'
+import { isOfferExpired, modalityLabel, offerAvailability } from '@/lib/offer-presentation'
 
 // El DTO del backend exige @MinLength(20) en la motivación.
 const MIN_MOTIVATION_LENGTH = 20
@@ -56,9 +56,10 @@ interface ApplicationSectionProps {
   application: Application | null | undefined
   /** Formulario de postulación, para cuando aún no hay una enviada. */
   form: React.ReactNode
+  unavailable?: string
 }
 
-function ApplicationSection({ application, form }: ApplicationSectionProps) {
+function ApplicationSection({ application, form, unavailable }: ApplicationSectionProps) {
   if (application === undefined) {
     return (
       <Section title="Tu postulación">
@@ -77,6 +78,15 @@ function ApplicationSection({ application, form }: ApplicationSectionProps) {
           </span>
         </div>
       </Section>
+    )
+  }
+
+  if (unavailable) {
+    return (
+      <Panel className="p-5">
+        <p className="font-semibold text-ink">{unavailable}</p>
+        <p className="mt-1 text-14 text-inkMid">Esta oferta se conserva como referencia y ya no recibe postulaciones.</p>
+      </Panel>
     )
   }
 
@@ -118,9 +128,9 @@ export function OfferDetailPage() {
       })
 
     if (isStudent) {
-      listMine()
-        .then((applications) => {
-          if (!cancelled) setExistingApplication(applications.find((a) => a.offerId === offerId) ?? null)
+      getMineForOffer(offerId)
+        .then((application) => {
+          if (!cancelled) setExistingApplication(application)
         })
         .catch(() => {
           // Si no se puede confirmar el estado de la postulación, se deja el
@@ -140,6 +150,10 @@ export function OfferDetailPage() {
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
     setSubmitError(null)
+    if (!offer || offer.status !== 'PUBLISHED' || isOfferExpired(offer.periodEnd)) {
+      setSubmitError('Esta convocatoria ya no está disponible para postular.')
+      return
+    }
 
     const trimmed = motivation.trim()
     if (trimmed.length < MIN_MOTIVATION_LENGTH) {
@@ -189,8 +203,9 @@ export function OfferDetailPage() {
       <PageHeader title={offer.title} subtitle={offer.company.name} />
 
       <div className="flex flex-wrap gap-1.5">
-        <Tag>{offer.modality}</Tag>
-        <Tag>{plural(offer.seats, 'cupo', 'cupos')}</Tag>
+        <Chip>{offerAvailability(offer)}</Chip>
+        <Tag>{modalityLabel(offer.modality)}</Tag>
+        <Tag>{offer.seats} cupos totales</Tag>
         <Tag>{offer.requiredHours} h</Tag>
       </div>
 
@@ -200,7 +215,7 @@ export function OfferDetailPage() {
             {offer.description}
           </p>
           <div className="mt-4 flex flex-col gap-2 rounded-lg bg-well px-4 py-3.5">
-            <SummaryRow label="Cupos" value={String(offer.seats)} />
+            <SummaryRow label="Cupos totales" value={String(offer.seats)} />
             <SummaryRow label="Horas requeridas" value={`${offer.requiredHours} h`} />
             <SummaryRow
               label="Periodo"
@@ -210,13 +225,14 @@ export function OfferDetailPage() {
         </div>
       </Section>
 
-      {isStudent ? (
+      {isStudent && (
         <ApplicationSection
           application={existingApplication}
+          unavailable={offerAvailability(offer) === 'Convocatoria abierta' ? undefined : offerAvailability(offer)}
           form={
             <form className="flex flex-col gap-4" onSubmit={handleSubmit} noValidate>
               <div className="flex flex-col gap-1.5">
-                <Label htmlFor="motivation">Contale por qué te interesa</Label>
+                <Label htmlFor="motivation">Cuéntale por qué te interesa</Label>
                 <p className="text-12 text-inkSoft">
                   Las empresas responden antes a quien escribe dos líneas.
                 </p>
@@ -254,12 +270,13 @@ export function OfferDetailPage() {
             </form>
           }
         />
-      ) : (
+      )}
+      {role === 'COORDINATOR' && (
         <Panel className="p-5 text-13 text-inkMid flex flex-wrap items-center justify-between gap-4">
           <div>
             <p className="font-semibold text-ink text-14">Postulaciones a esta oferta</p>
             <p className="text-inkSoft">
-              Revisá los estudiantes postulados, decidí sus aplicaciones y asigná tutores académicos para iniciar sus prácticas.
+              Revisa los estudiantes postulados, revisa sus postulaciones y asigna tutores académicos para iniciar sus prácticas.
             </p>
           </div>
           <Button asChild>

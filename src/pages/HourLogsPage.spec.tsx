@@ -8,7 +8,13 @@ const hooks = vi.hoisted(() => ({
 }))
 
 vi.mock('@/offline/hooks/usePlacement', () => ({ usePlacement: hooks.usePlacement }))
-vi.mock('@/offline/hooks/useHourLogs', () => ({ useHourLogs: hooks.useHourLogs }))
+vi.mock('@/offline/hooks/useHourLedger', async () => {
+  const { summarizeHours } = await import('@/lib/hours')
+  return { useHourLedger: () => {
+    const items = hooks.useHourLogs() as LocalHourLog[]
+    return { items, attendance: items, total: items.length, pendingCount: 0, hours: summarizeHours(items, 120) }
+  } }
+})
 
 import { HourLogsPage } from './HourLogsPage'
 

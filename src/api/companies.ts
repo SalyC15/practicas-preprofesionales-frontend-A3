@@ -1,5 +1,14 @@
 import type { ApplicationStatus } from './applications'
 import { api } from './client'
+import { type Page, pageQuery } from './pagination'
+
+export interface CompanyPage extends Page<Company> {
+  summary: { registered: number; verified: number; sectors: number }
+}
+
+export function listCompaniesPage(page: number, pageSize: number, search = ''): Promise<CompanyPage> {
+  return api(`/companies/paged?${pageQuery(page, pageSize, { search })}`)
+}
 import type { Offer } from './offers'
 
 export interface Company {
@@ -44,7 +53,17 @@ export interface CreateOfferDto {
  * estado) para poder mostrar cupos ocupados sin una llamada por fila.
  */
 export interface CompanyOffer extends Offer {
+  applicationCount?: number
+  acceptedCount?: number
   applications: { status: ApplicationStatus }[]
+}
+
+export function listMyOffersPage(page: number, size: number): Promise<Page<CompanyOffer> & { summary: { published: number; drafts: number; applications: number } }> {
+  return api(`/offers/me/paged?${pageQuery(page, size)}`)
+}
+
+export function listApplicationsPage(offerId: number, page: number, size: number): Promise<Page<OfferApplication> & { accepted: number }> {
+  return api(`/offers/${offerId}/applications/paged?${pageQuery(page, size)}`)
 }
 
 export interface OfferApplicant {

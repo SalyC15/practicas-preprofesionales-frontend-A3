@@ -171,7 +171,7 @@ export function CompanyProfilePage() {
     <div className="space-y-8 pb-12">
       <PageHeader
         title="Perfil de Empresa"
-        subtitle="Administrá la información institucional, logo de marca, sede física y canales de contacto directo."
+        subtitle="Administra la información institucional, logo de marca, sede física y canales de contacto directo."
       />
 
       {/* Tarjeta de Resumen y Encabezado de Marca */}
@@ -309,7 +309,7 @@ export function CompanyProfilePage() {
                 </div>
               </div>
               <p className="mt-1 text-12 text-inkMid">
-                Pegá la dirección web directa (URL pública) de tu logotipo en formato PNG, SVG o JPG.
+                Pega la dirección web directa (URL pública) de tu logotipo en formato PNG, SVG o JPG.
               </p>
             </div>
           </div>
@@ -430,7 +430,7 @@ export function CompanyProfilePage() {
                 rows={4}
                 value={description}
                 onChange={(e) => setDescription(e.target.value)}
-                placeholder="Contá de qué se trata la empresa, su visión, proyectos de innovación y qué aprenderán los practicantes en su pasantía..."
+                placeholder="Cuenta de qué se trata la empresa, su visión, proyectos de innovación y qué aprenderán los practicantes en su pasantía..."
                 className="mt-1.5"
               />
             </div>
@@ -441,7 +441,7 @@ export function CompanyProfilePage() {
         <div className="sticky bottom-4 z-20 flex flex-wrap items-center justify-end gap-3 rounded-2xl border border-line/90 bg-surface/95 p-4 shadow-lg backdrop-blur-md">
           {hasChanges ? (
             <span className="mr-auto text-13 font-medium text-amber-700">
-              * Tenés cambios sin guardar
+              * Tienes cambios sin guardar
             </span>
           ) : (
             <span className="mr-auto text-13 text-inkSoft">Todos los datos están sincronizados</span>

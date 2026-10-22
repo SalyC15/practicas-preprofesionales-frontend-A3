@@ -1,4 +1,5 @@
 import { api } from './client'
+import { type Page, pageQuery } from './pagination'
 
 export interface OfferCompany {
   id: number
@@ -23,6 +24,10 @@ export interface Offer {
 /** Ofertas publicadas. No sincronizable: siempre requiere red. */
 export function listOffers(): Promise<Offer[]> {
   return api<Offer[]>('/offers')
+}
+
+export function listOffersPage(page: number, pageSize: number, modality = '', search = ''): Promise<Page<Offer> & { modalities: string[] }> {
+  return api(`/offers/paged?${pageQuery(page, pageSize, { modality, search })}`)
 }
 
 export function getOffer(id: number): Promise<Offer> {

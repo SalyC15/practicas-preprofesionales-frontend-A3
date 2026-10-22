@@ -57,7 +57,7 @@ describe('CompanyProfilePage', () => {
     const nameInput = await screen.findByDisplayValue('Corporación Alfa')
     fireEvent.change(nameInput, { target: { value: 'Corporación Alfa Internacional' } })
 
-    expect(screen.getByText('* Tenés cambios sin guardar')).toBeInTheDocument()
+    expect(screen.getByText('* Tienes cambios sin guardar')).toBeInTheDocument()
 
     const saveButton = screen.getByRole('button', { name: 'Guardar cambios' })
     fireEvent.click(saveButton)

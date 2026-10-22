@@ -1,10 +1,11 @@
+import { usePageState } from '@/components/usePageState'
 import { useEffect, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import {
   type ApplicationDecision,
   type OfferApplication,
   decideApplication,
-  listApplicationsForOffer,
+  listApplicationsPage,
 } from '@/api/companies'
 import { ApiError } from '@/api/client'
 import { type Offer, getOffer } from '@/api/offers'
@@ -28,9 +29,7 @@ function formatDate(dateValue: string): string {
   return new Intl.DateTimeFormat('es-EC', { day: '2-digit', month: 'short', year: 'numeric' }).format(parsed)
 }
 
-function acceptedCount(applications: OfferApplication[]): number {
-  return applications.filter((application) => application.status === 'ACCEPTED').length
-}
+
 
 function ColumnHeader() {
   return (
@@ -63,6 +62,9 @@ function BackLink({ isCoordinator, offerId }: { isCoordinator: boolean; offerId:
  * carrera real que el equipo debe poder encontrar.
  */
 export function OfferApplicationsPage() {
+  const pager = usePageState()
+  const [total, setTotal] = useState(0)
+  const [acceptedTotal, setAcceptedTotal] = useState(0)
   const { role } = useAuth()
   const isCoordinator = role === 'COORDINATOR'
   const { id } = useParams<{ id: string }>()
@@ -81,8 +83,8 @@ export function OfferApplicationsPage() {
   const [createdPlacements, setCreatedPlacements] = useState<Record<number, boolean>>({})
 
   function refetchApplications() {
-    return listApplicationsForOffer(offerId)
-      .then((data) => setApplications(data))
+    return listApplicationsPage(offerId, pager.page, pager.pageSize)
+      .then((data) => { setApplications(data.items); setTotal(data.total); setAcceptedTotal(data.accepted) })
       .catch((err) => setLoadError(err instanceof ApiError ? err.message : 'No se pudieron cargar las postulaciones'))
   }
 
@@ -98,9 +100,9 @@ export function OfferApplicationsPage() {
           setLoadError(err instanceof ApiError ? err.message : 'No se pudo cargar la oferta')
         }
       })
-    listApplicationsForOffer(offerId)
+    listApplicationsPage(offerId, pager.page, pager.pageSize)
       .then((data) => {
-        if (!cancelled) setApplications(data)
+        if (!cancelled) { setApplications(data.items); setTotal(data.total); setAcceptedTotal(data.accepted) }
       })
       .catch((err) => {
         if (!cancelled) {
@@ -110,7 +112,7 @@ export function OfferApplicationsPage() {
     return () => {
       cancelled = true
     }
-  }, [offerId])
+  }, [offerId, pager.page, pager.pageSize])
 
   async function decide(applicationId: number, status: ApplicationDecision, state: DecisionState) {
     setDecisionError(null)
@@ -146,7 +148,7 @@ export function OfferApplicationsPage() {
     return null
   }
 
-  const occupied = acceptedCount(applications)
+  const occupied = acceptedTotal
   const remaining = offer.seats - occupied
 
   return (
@@ -184,9 +186,9 @@ export function OfferApplicationsPage() {
         toolbar={
           applications.length > 0 ? (
             <span className="ml-auto font-data text-12 text-inkSoft">
-              {applications.length === 1
+              {total === 1
                 ? '1 postulación'
-                : `${applications.length} postulaciones`}
+                : `${total} postulaciones`}
             </span>
           ) : undefined
         }
@@ -302,6 +304,7 @@ export function OfferApplicationsPage() {
           refetchApplications()
         }}
       />
+      {pager.controls(total)}
     </>
   )
 }

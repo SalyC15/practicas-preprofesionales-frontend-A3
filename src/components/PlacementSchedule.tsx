@@ -1,8 +1,9 @@
+import { usePageState } from '@/components/usePageState'
 import { Calendar, CheckCircle2, Clock } from 'lucide-react'
 import { generatePlacementSchedule, type ScheduleConfig, type ScheduleSummary } from '@/lib/schedule'
 import { parseStoredCalendarDateUtc } from '@/lib/date'
 import { usePlacement } from '@/offline/hooks/usePlacement'
-import { useHourLogs } from '@/offline/hooks/useHourLogs'
+import { useHourLedger } from '@/offline/hooks/useHourLedger'
 import type { LocalHourLog, LocalPlacement } from '@/offline/db'
 
 function formatSessionDate(dateValue: string): string {
@@ -33,7 +34,9 @@ export function PlacementSchedule({
 }: PlacementScheduleProps) {
   const hookPlacement = usePlacement()
   const activePlacement = propPlacement !== undefined ? propPlacement : hookPlacement
-  const hookLogs = useHourLogs(activePlacement?.id ?? 0)
+  const pager = usePageState()
+  const ledger = useHourLedger(activePlacement, 1, 1)
+  const hookLogs = ledger?.attendance
   const activeLogs = propLogs !== undefined ? propLogs : hookLogs
 
   if (!activePlacement) {
@@ -106,7 +109,7 @@ export function PlacementSchedule({
 
       <div className="mt-2 max-h-[380px] overflow-y-auto rounded-lg border border-divider/50">
         <ul className="divide-y divide-divider/40">
-          {schedule.sessions.map((s) => {
+          {schedule.sessions.slice(pager.offset, pager.offset + pager.pageSize).map((s) => {
             const isDone = s.status === 'CONFIRMED' || s.status === 'APPROVED'
             return (
               <li
@@ -158,6 +161,7 @@ export function PlacementSchedule({
           })}
         </ul>
       </div>
+      {pager.controls(schedule.sessions.length)}
     </section>
   )
 }

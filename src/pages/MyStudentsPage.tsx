@@ -1,3 +1,5 @@
+import { usePageState } from '@/components/usePageState'
+import { readStudentPage } from '@/offline/hooks/readStudentPage'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { Link } from 'react-router-dom'
 import { useAuth } from '@/auth/AuthContext'
@@ -8,13 +10,9 @@ import { ProgressBar } from '@/components/ProgressBar'
 import { StatCard, StatGrid } from '@/components/StatCard'
 import { Button } from '@/components/ui/button'
 import { Ledger } from '@/components/ledger/Ledger'
-import { db, type LocalPlacement } from '@/offline/db'
 
-interface StudentRow {
-  placement: LocalPlacement
-  approvedHours: number
-  submittedHours: number
-}
+
+
 
 function ColumnHeader() {
   return (
@@ -36,40 +34,28 @@ function ColumnHeader() {
 export function MyStudentsPage() {
   const { user } = useAuth()
 
-  const rows = useLiveQuery<StudentRow[] | undefined>(async () => {
-    if (!user) return undefined
-    const placements = await db.placements.where('tutorId').equals(user.id).toArray()
-    return Promise.all(
-      placements.map(async (placement) => {
-        const logs = await db.hourLogs.where('placementId').equals(placement.id).toArray()
-        let approvedHours = 0
-        let submittedHours = 0
-        for (const log of logs) {
-          if (log.status === 'APPROVED') approvedHours += log.hours
-          if (log.status === 'SUBMITTED') submittedHours += log.hours
-        }
-        return { placement, approvedHours, submittedHours }
-      }),
-    )
-  }, [user?.id])
+  const pager = usePageState()
+  const result = useLiveQuery(() => user ? readStudentPage(user.id, pager.page, pager.pageSize) : undefined,
+    [user?.id, pager.page, pager.pageSize])
+  const rows = result?.items
 
-  if (rows === undefined) {
+  if (rows === undefined || result === undefined) {
     return <LoadingState>Cargando tus practicantes…</LoadingState>
   }
 
-  const waiting = rows.filter((row) => row.submittedHours > 0).length
-  const pendingHours = rows.reduce((total, row) => total + row.submittedHours, 0)
+  const waiting = result.waiting
+  const pendingHours = result.pendingHours
 
   return (
     <>
       <PageHeader
         title="Mis practicantes"
-        subtitle="Ordenados como los devuelve tu cola: revisá primero lo que está esperando."
+        subtitle="Ordenados como los devuelve tu cola: revisa primero lo que está esperando."
       />
 
       {rows.length > 0 ? (
         <StatGrid>
-          <StatCard label="Practicantes" value={String(rows.length)} note="activos" />
+          <StatCard label="Practicantes" value={String(result.total)} note="activos" />
           <StatCard
             label="Esperando revisión"
             value={String(waiting)}
@@ -89,7 +75,7 @@ export function MyStudentsPage() {
         toolbar={
           rows.length > 0 ? (
             <span className="ml-auto font-data text-12 text-inkSoft">
-              {rows.length === 1 ? '1 practicante' : `${rows.length} practicantes`}
+              {result.total === 1 ? '1 practicante' : `${result.total} practicantes`}
             </span>
           ) : undefined
         }
@@ -97,7 +83,7 @@ export function MyStudentsPage() {
         {rows.length === 0 ? (
           <EmptyState
             title="Todavía no tienes practicantes asignados"
-            description="Cuando la coordinación te asigne uno, aparece acá."
+            description="Cuando la coordinación te asigne uno, aparece aquí."
           />
         ) : (
           <Ledger header={<ColumnHeader />}>
@@ -144,6 +130,7 @@ export function MyStudentsPage() {
           </Ledger>
         )}
       </Panel>
+      {pager.controls(result.total)}
     </>
   )
 }

@@ -1,4 +1,12 @@
 import { api } from './client'
+import { type Page, pageQuery } from './pagination'
+
+export function listMinePage(page: number, size: number): Promise<Page<Application>> {
+  return api(`/applications/me/paged?${pageQuery(page, size)}`)
+}
+export function getMineForOffer(offerId: number): Promise<Application | null> {
+  return api(`/applications/me/offer/${offerId}`)
+}
 import type { Offer } from './offers'
 
 export type ApplicationStatus = 'SUBMITTED' | 'INTERVIEW' | 'ACCEPTED' | 'REJECTED' | 'WITHDRAWN'

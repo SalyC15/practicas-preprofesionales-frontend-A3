@@ -1,4 +1,4 @@
-import { useEffect } from 'react'
+import { useEffect, useState } from 'react'
 import { NavLink, Outlet } from 'react-router-dom'
 import { useAuth, type Role } from '@/auth/AuthContext'
 import { Button } from '@/components/ui/button'
@@ -86,6 +86,13 @@ function initialsOf(fullName: string | undefined): string {
 
 export function AppLayout() {
   const { user, role, logout, refresh, renewing, expiresAt, sessionMessage } = useAuth()
+  const [now, setNow] = useState(Date.now)
+
+  useEffect(() => {
+    const timer = window.setInterval(() => setNow(Date.now()), 15_000)
+    return () => window.clearInterval(timer)
+  }, [])
+  const sessionEnding = expiresAt !== null && expiresAt - now <= 120_000
 
   // Se llama una sola vez para toda la sesión autenticada: AppLayout envuelve
   // todas las rutas protegidas vía <Outlet />, así que no se remonta al
@@ -98,10 +105,10 @@ export function AppLayout() {
 
   return (
     <div className="flex min-h-screen flex-col bg-paper md:h-screen md:overflow-hidden">
-      <header className="flex h-topbar flex-none items-center gap-4 border-b border-line bg-surface px-5 shadow-xs">
+      <header className="flex min-h-[60px] flex-none flex-wrap items-center gap-2 border-b border-line bg-surface px-4 py-2 shadow-xs sm:flex-nowrap sm:gap-4 sm:px-5">
         <BrandLogo size="md" />
 
-        <div className="ml-auto flex items-center gap-3">
+        <div className="ml-auto flex items-center gap-2 sm:gap-3">
           <div className="flex items-center gap-2.5 rounded-full border border-line bg-surface py-1 pl-1 pr-2.5 shadow-2xs">
             <span
               aria-hidden="true"
@@ -116,7 +123,7 @@ export function AppLayout() {
           </div>
           {expiresAt !== null && (
             <Button type="button" variant="outline" size="sm" disabled={renewing}
-              onClick={() => { void refresh().catch(() => {}) }}>
+              onClick={() => { refresh().catch(() => {}) }}>
               {renewing ? 'Renovando…' : 'Renovar sesión'}
             </Button>
           )}
@@ -126,9 +133,9 @@ export function AppLayout() {
         </div>
       </header>
 
-      {expiresAt !== null && (
-        <p role="status" className="px-4 py-2 text-13 text-inkMid">
-          Tu sesión vence a las {new Date(expiresAt).toLocaleTimeString('es')}. Podés renovarla antes de que expire.
+      {sessionEnding && expiresAt !== null && (
+        <p role="status" className="border-b border-pending/20 bg-chipPending px-4 py-2 text-13 text-pending">
+          Tu sesión vence a las {new Date(expiresAt).toLocaleTimeString('es-EC', { hour: '2-digit', minute: '2-digit' })}. Puedes renovarla antes de que expire.
         </p>
       )}
       {sessionMessage && <p role="alert" className="px-4 py-2 text-void">{sessionMessage}</p>}

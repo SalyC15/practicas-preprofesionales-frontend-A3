@@ -1,3 +1,4 @@
+import { usePageState } from '@/components/usePageState'
 import { useState } from 'react'
 import { Calendar, CheckCircle2, Clock, Check, Loader2, Sparkles } from 'lucide-react'
 import { StatusBadge } from '@/components/StatusBadge'
@@ -31,6 +32,7 @@ export function ScheduleAttendancePanel({
   companyName,
   onConfirmAttendance,
 }: ScheduleAttendancePanelProps) {
+  const pager = usePageState('Paginación del cronograma')
   const [filter, setFilter] = useState<'pending' | 'confirmed' | 'all'>('pending')
   const [confirmingDate, setConfirmingDate] = useState<string | null>(null)
   const [actionMessage, setActionMessage] = useState<string | null>(null)
@@ -123,7 +125,7 @@ export function ScheduleAttendancePanel({
         <FilterTabs
           label="Filtro de sesiones del cronograma"
           value={filter}
-          onChange={(val) => setFilter(val as 'pending' | 'confirmed' | 'all')}
+          onChange={(val) => { setFilter(val as 'pending' | 'confirmed' | 'all'); pager.setPage(1) }}
           options={[
             { value: 'pending', label: `Pendientes de asistencia (${pendingSessions.length})` },
             { value: 'confirmed', label: `Asistidas (${confirmedSessions.length})` },
@@ -156,7 +158,7 @@ export function ScheduleAttendancePanel({
         </div>
       ) : (
         <div className="flex flex-col divide-y divide-divider/30">
-          {visibleSessions.map((session) => {
+          {visibleSessions.slice(pager.offset, pager.offset + pager.pageSize).map((session) => {
             const isConfirming = confirmingDate === session.date
             const isConfirmed = session.status === 'CONFIRMED' || session.status === 'APPROVED'
 
@@ -223,6 +225,7 @@ export function ScheduleAttendancePanel({
           })}
         </div>
       )}
+      {pager.controls(visibleSessions.length)}
     </div>
   )
 }

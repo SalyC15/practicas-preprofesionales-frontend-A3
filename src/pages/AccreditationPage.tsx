@@ -1,5 +1,6 @@
+import { usePageState } from '@/components/usePageState'
 import { useEffect, useState } from 'react'
-import { type AccreditationRow, reportForPeriod } from '@/api/accreditation'
+import { type AccreditationRow, type AccreditationPage, reportPage } from '@/api/accreditation'
 import { ApiError } from '@/api/client'
 import { FilterTabs } from '@/components/FilterTabs'
 import { PageHeader } from '@/components/PageHeader'
@@ -26,9 +27,9 @@ function ColumnHeader() {
   )
 }
 
-function AccreditationStats({ rows }: { rows: AccreditationRow[] }) {
-  const accredited = rows.filter((row) => row.level === 'ACREDITADO').length
-  const notAccredited = rows.filter((row) => row.level === 'NO_ACREDITADO').length
+function AccreditationStats({ result }: { result: AccreditationPage }) {
+  const { accredited, observations, pending, notAccredited } = result.summary
+  const rows = { length: result.total }
 
   return (
     <StatGrid>
@@ -36,8 +37,14 @@ function AccreditationStats({ rows }: { rows: AccreditationRow[] }) {
       <StatCard
         label="Acreditados"
         value={String(accredited)}
-        note={`de ${rows.length}`}
+        note={observations > 0 ? `${observations} con observaciones` : `de ${rows.length}`}
         noteTone="stamp"
+      />
+      <StatCard
+        label="Pendientes"
+        value={String(pending)}
+        note="en proceso"
+        noteTone={pending > 0 ? 'pending' : 'neutral'}
       />
       <StatCard
         label="No acreditados"
@@ -74,6 +81,8 @@ function AccreditationRowItem({ row }: { row: AccreditationRow }) {
 
 /** Acta de acreditación por periodo académico. No sincronizable: siempre requiere red. */
 export function AccreditationPage() {
+  const pager = usePageState()
+  const [result, setResult] = useState<AccreditationPage>()
   const [period, setPeriod] = useState<(typeof PERIODS)[number]>(PERIODS[0])
   const [rows, setRows] = useState<AccreditationRow[] | undefined>(undefined)
   const [error, setError] = useState<string | null>(null)
@@ -82,9 +91,9 @@ export function AccreditationPage() {
     let cancelled = false
     setRows(undefined)
     setError(null)
-    reportForPeriod(period)
+    reportPage(period, pager.page, pager.pageSize)
       .then((data) => {
-        if (!cancelled) setRows(data)
+        if (!cancelled) { setRows(data.items); setResult(data) }
       })
       .catch((err) => {
         if (!cancelled) setError(err instanceof ApiError ? err.message : 'No se pudo generar el acta')
@@ -92,7 +101,7 @@ export function AccreditationPage() {
     return () => {
       cancelled = true
     }
-  }, [period])
+  }, [period, pager.page, pager.pageSize])
 
   return (
     <>
@@ -105,17 +114,17 @@ export function AccreditationPage() {
         <FilterTabs
           label="Periodo académico"
           value={period}
-          onChange={(value) => setPeriod(value as (typeof PERIODS)[number])}
+          onChange={(value) => { setPeriod(value as (typeof PERIODS)[number]); pager.setPage(1) }}
           options={PERIODS.map((option) => ({ value: option, label: option }))}
         />
         {rows ? (
           <span className="ml-auto font-data text-12 text-inkSoft">
-            {plural(rows.length, 'practicante', 'practicantes')}
+            {plural(result?.total ?? 0, 'practicante', 'practicantes')}
           </span>
         ) : null}
       </div>
 
-      {rows ? <AccreditationStats rows={rows} /> : null}
+      {result ? <AccreditationStats result={result} /> : null}
 
       <AsyncSection
         error={error}
@@ -124,7 +133,7 @@ export function AccreditationPage() {
         empty={
           <EmptyState
             title="No hay placements en este periodo"
-            description="Probá con el otro periodo académico."
+            description="Prueba con el otro periodo académico."
           />
         }
       >
@@ -138,6 +147,7 @@ export function AccreditationPage() {
           </Panel>
         )}
       </AsyncSection>
+      {result && pager.controls(result.total, rows === undefined)}
     </>
   )
 }

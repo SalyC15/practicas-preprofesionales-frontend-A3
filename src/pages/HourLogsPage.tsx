@@ -17,12 +17,13 @@ import {
 import { Ledger, LedgerHeaderRow } from '@/components/ledger/Ledger'
 import { LedgerRow } from '@/components/ledger/LedgerRow'
 import { parseStoredCalendarDateUtc } from '@/lib/date'
-import { type HoursSummary, summarizeHours } from '@/lib/hours'
+import { type HoursSummary } from '@/lib/hours'
 import { generatePlacementSchedule, type ScheduledSession } from '@/lib/schedule'
 import { plural } from '@/lib/utils'
 import { confirmAttendance } from '@/offline/attendance'
 import type { LocalHourLog } from '@/offline/db'
-import { useHourLogs } from '@/offline/hooks/useHourLogs'
+import { useHourLedger } from '@/offline/hooks/useHourLedger'
+import { usePageState } from '@/components/usePageState'
 import { usePlacement } from '@/offline/hooks/usePlacement'
 
 function formatDate(dateValue: string): string {
@@ -119,7 +120,9 @@ function NewHourLogDialog({ placementId }: { placementId: number }) {
 
 export function HourLogsPage() {
   const placement = usePlacement()
-  const logs = useHourLogs(placement?.id ?? -1)
+  const pager = usePageState('Paginación de horas')
+  const ledger = useHourLedger(placement, pager.page, pager.pageSize)
+  const logs = ledger?.items
 
   async function handleConfirmAttendance(session: ScheduledSession) {
     if (!placement) return
@@ -139,14 +142,14 @@ export function HourLogsPage() {
     )
   }
 
-  if (logs === undefined) {
+  if (logs === undefined || ledger === undefined) {
     return <LoadingState>Cargando registros de horas…</LoadingState>
   }
 
   // Totales recalculados en cada render a propósito: con esta pantalla no
   // hace falta más que sumar un arreglo, así que no se envuelve en useMemo.
-  const hours = summarizeHours(logs, placement.requiredHours)
-  const scheduleSummary = generatePlacementSchedule(placement, logs)
+  const hours = ledger.hours
+  const scheduleSummary = generatePlacementSchedule(placement, ledger.attendance)
 
   return (
     <div className="flex flex-col gap-6">
@@ -174,11 +177,12 @@ export function HourLogsPage() {
         title="Historial de horas registradas"
         aside={
           <span className="font-data text-12 text-inkSoft">
-            {plural(logs.length, 'registro', 'registros')}
+            {plural(ledger.total, 'registro', 'registros')}
           </span>
         }
       >
         <HourLogsList logs={logs} />
+        {pager.controls(ledger.total)}
       </Section>
     </div>
   )

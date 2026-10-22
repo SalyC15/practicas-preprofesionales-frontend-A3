@@ -24,9 +24,9 @@
     --ink: 222 47% 11%; /* #0F172A — texto principal carbón */
     --ink-deep: 215 25% 27%; /* #334155 — texto secundario con cuerpo */
     --ink-body: 215 25% 27%; /* #334155 — párrafos */
-    --ink-mid: 215 16% 47%; /* #64748B — subtítulos */
-    --ink-soft: 215 16% 57%; /* #64748B — metadatos */
-    --ink-mute: 215 16% 65%; /* #94A3B8 — etiquetas en versalitas */
+    --ink-mid: 215 19% 38%; /* Texto secundario legible sobre superficies claras */
+    --ink-soft: 215 16% 40%; /* Metadatos y etiquetas */
+    --ink-mute: 215 16% 42%; /* Navegación y encabezados */
 
     /* Acentos semánticos limpios y legibles */
     --stamp: 217 91% 35%; /* #1E40AF — primario y estado resuelto azul cobalto institucional */

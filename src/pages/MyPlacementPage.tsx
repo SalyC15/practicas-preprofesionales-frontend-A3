@@ -14,7 +14,7 @@ import { parseLocalDate } from '@/lib/date'
 import { type HoursSummary, summarizeHours } from '@/lib/hours'
 import { plural } from '@/lib/utils'
 import { db, type LocalDocument, type LocalHourLog } from '@/offline/db'
-import { useHourLogs } from '@/offline/hooks/useHourLogs'
+import { useHourLedger } from '@/offline/hooks/useHourLedger'
 import { usePlacement } from '@/offline/hooks/usePlacement'
 import { type DocumentKind, KIND_LABEL, REQUIRED_KINDS, latestStatus } from '@/pages/DocumentsPage'
 
@@ -49,7 +49,7 @@ function PlacementHero({
   return (
     <HeroPanel
       title={`Te faltan ${remaining.toFixed(1)} horas aprobadas`}
-      description="Registrá tus horas el mismo día. Tu tutor las revisa y lo que apruebe cuenta para el acta final."
+      description="Registra tus horas el mismo día. Tu tutor las revisa y lo que apruebe cuenta para el acta final."
       aside={
         <>
           <HeroCard label="Sin aprobar">
@@ -103,13 +103,7 @@ function PlacementStats({
       <StatCard
         label="Documentos pendientes"
         value={String(pendingDocuments)}
-        note={
-          missingRequiredCount > 0
-            ? 'por subir'
-            : pendingDocuments > 0
-              ? 'por validar'
-              : 'al día'
-        }
+        note={missingRequiredCount > 0 ? 'por subir' : documentNote(pendingDocuments)}
         noteTone={pendingDocuments > 0 ? 'pending' : 'neutral'}
       />
       <StatCard label="Registros" value={String(logCount)} note="en el libro" />
@@ -264,11 +258,20 @@ function RecentLogs({ logs }: { logs: LocalHourLog[] | undefined }) {
 
 export function MyPlacementPage() {
   const placement = usePlacement()
-  const logs = useHourLogs(placement?.id ?? -1)
-  const documents = useLiveQuery<LocalDocument[] | undefined>(async () => {
+  const ledger = useHourLedger(placement, 1, 5)
+  const logs = ledger?.items
+  const documentSummary = useLiveQuery(async () => {
     if (!placement) return undefined
-    return db.documents.where('placementId').equals(placement.id).toArray()
+    const latest = new Map<string, LocalDocument>()
+    const preview: LocalDocument[] = []
+    let pending = 0
+    await db.documents.where('placementId').equals(placement.id).reverse().each((doc) => {
+      if (!latest.has(doc.kind) || latest.get(doc.kind)!.updatedAt < doc.updatedAt) latest.set(doc.kind, doc)
+      if (doc.status === 'PENDING') { pending++; if (preview.length < 5) preview.push(doc) }
+    })
+    return { pending, items: [...new Map([...latest.values(), ...preview].map((doc) => [doc.id, doc])).values()] }
   }, [placement?.id])
+  const documents = documentSummary?.items
 
   if (placement === undefined) {
     return <LoadingState>Cargando tu práctica…</LoadingState>
@@ -278,7 +281,7 @@ export function MyPlacementPage() {
     return (
       <EmptyState
         title="No tienes una práctica activa todavía"
-        description="Cuando la coordinación active tu plaza, la vas a ver acá."
+        description="Cuando la coordinación active tu plaza, la vas a ver aquí."
       />
     )
   }
@@ -287,15 +290,15 @@ export function MyPlacementPage() {
     const status = latestStatus(documents ?? [], kind)
     return status === null || status === 'REJECTED'
   })
-  const pendingReview = documents?.filter((doc) => doc.status === 'PENDING') ?? []
-  const pendingDocuments = missingRequired.length + pendingReview.length
-  const hours = summarizeHours(logs, placement.requiredHours)
+  const companyLabel = placement.companyName ?? `Empresa #${placement.companyId}`
+  const pendingDocuments = missingRequired.length + (documentSummary?.pending ?? 0)
+  const hours = ledger?.hours ?? summarizeHours([], placement.requiredHours)
 
   return (
     <>
       <PageHeader
         title={placement.offerTitle ?? 'Mi práctica'}
-        subtitle={`${placement.companyName ?? `Empresa #${placement.companyId}`} · ${formatPeriod(placement.startDate, placement.endDate)}`}
+        subtitle={`${companyLabel} · ${formatPeriod(placement.startDate, placement.endDate)}`}
         actions={
           <Button asChild>
             <Link to="/horas">Registrar horas</Link>
@@ -309,7 +312,7 @@ export function MyPlacementPage() {
         hours={hours}
         pendingDocuments={pendingDocuments}
         missingRequiredCount={missingRequired.length}
-        logCount={logs?.length ?? 0}
+        logCount={ledger?.total ?? 0}
       />
 
       <Section title="Datos de la práctica">
@@ -337,3 +340,7 @@ export function MyPlacementPage() {
     </>
   )
 }
+
+
+function documentNote(pending: number) { return pending > 0 ? 'por validar' : 'al día' }
+

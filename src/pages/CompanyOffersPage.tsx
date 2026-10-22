@@ -1,3 +1,5 @@
+import { usePageState } from '@/components/usePageState'
+import { modalityLabel } from '@/lib/offer-presentation'
 import { type FormEvent, useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import {
@@ -6,8 +8,8 @@ import {
   type CreateOfferDto,
   closeOffer,
   createOffer,
-  listCompanies,
-  listMyOffers,
+  getMyCompany,
+  listMyOffersPage,
   publishOffer,
 } from '@/api/companies'
 import { ApiError } from '@/api/client'
@@ -117,10 +119,8 @@ function FieldError({ message }: { message?: string }) {
   )
 }
 
-function CompanyOffersStats({ offers }: { offers: CompanyOffer[] }) {
-  const published = offers.filter((offer) => offer.status === 'PUBLISHED').length
-  const drafts = offers.filter((offer) => offer.status === 'DRAFT').length
-  const applications = offers.reduce((total, offer) => total + offer.applications.length, 0)
+function CompanyOffersStats({ summary }: { summary: { published: number; drafts: number; applications: number } }) {
+  const { published, drafts, applications } = summary
 
   return (
     <StatGrid>
@@ -146,16 +146,16 @@ interface CompanyOfferCardProps {
 
 function CompanyOfferCard({ offer, state, onPublish, onClose, onViewSchedule }: CompanyOfferCardProps) {
   const busy = state === 'publishing' || state === 'closing'
-  const occupied = acceptedCount(offer)
+  const occupied = offer.acceptedCount ?? acceptedCount(offer)
 
   return (
     <OfferCard
       title={offer.title}
       subtitle={formatPeriod(offer.periodStart, offer.periodEnd)}
       status={<StatusBadge status={offer.status} />}
-      tags={[offer.modality, `${occupied}/${offer.seats} cupos`, `${offer.requiredHours} h`]}
+      tags={[modalityLabel(offer.modality), `${Math.max(0, offer.seats - occupied)} disponibles de ${offer.seats}`, `${offer.requiredHours} h`]}
       description={offer.description}
-      meta={plural(offer.applications.length, 'postulación', 'postulaciones')}
+      meta={plural(offer.applicationCount ?? offer.applications.length, 'postulación', 'postulaciones')}
       actions={
         <>
           <Button
@@ -242,14 +242,14 @@ function CreateOfferDialog({
             <div className="flex flex-col gap-1.5">
               <Label htmlFor="offer-description">¿Qué va a hacer el practicante?</Label>
               <p className="text-12 text-inkSoft">
-                Indicá las actividades y quién lo supervisa; es lo que más devuelve la coordinación.
+                Indica las actividades y quién lo supervisa; es lo que más devuelve la coordinación.
               </p>
               <Textarea
                 id="offer-description"
                 value={form.description}
                 onChange={(event) => onFieldChange('description', event.target.value)}
                 rows={3}
-                placeholder="Describí las actividades, el horario y quién supervisa"
+                placeholder="Describe las actividades, el horario y quién supervisa"
                 aria-invalid={Boolean(formErrors.description)}
               />
               <FieldError message={formErrors.description} />
@@ -409,6 +409,9 @@ function CreateOfferDialog({
 }
 
 export function CompanyOffersPage() {
+  const pager = usePageState()
+  const [total, setTotal] = useState(0)
+  const [summary, setSummary] = useState({ published: 0, drafts: 0, applications: 0 })
   const { user } = useAuth()
   const [offers, setOffers] = useState<CompanyOffer[] | undefined>(undefined)
   const [companies, setCompanies] = useState<Company[] | undefined>(undefined)
@@ -427,23 +430,23 @@ export function CompanyOffersPage() {
   const [previewScheduleOpen, setPreviewScheduleOpen] = useState(false)
 
   function refetchOffers() {
-    return listMyOffers()
-      .then((data) => setOffers(data))
+    return listMyOffersPage(pager.page, pager.pageSize)
+      .then((data) => { setOffers(data.items); setTotal(data.total); setSummary(data.summary) })
       .catch((err) => setError(err instanceof ApiError ? err.message : 'No se pudieron cargar tus ofertas'))
   }
 
   useEffect(() => {
     let cancelled = false
-    listMyOffers()
+    listMyOffersPage(pager.page, pager.pageSize)
       .then((data) => {
-        if (!cancelled) setOffers(data)
+        if (!cancelled) { setOffers(data.items); setTotal(data.total); setSummary(data.summary) }
       })
       .catch((err) => {
         if (!cancelled) setError(err instanceof ApiError ? err.message : 'No se pudieron cargar tus ofertas')
       })
-    listCompanies()
+    getMyCompany()
       .then((data) => {
-        if (!cancelled) setCompanies(data)
+        if (!cancelled) setCompanies([data])
       })
       .catch(() => {
         // La empresa es solo un dato de contexto en el encabezado: si falla,
@@ -452,7 +455,7 @@ export function CompanyOffersPage() {
     return () => {
       cancelled = true
     }
-  }, [])
+  }, [pager.page, pager.pageSize])
 
   const myCompany = companies?.find((company) => company.id === user?.companyId)
 
@@ -547,7 +550,7 @@ export function CompanyOffersPage() {
     }
   }
 
-  const intro = 'Publicá una vacante y recibí postulaciones de estudiantes.'
+  const intro = 'Publica una vacante y recibe postulaciones de estudiantes.'
 
   return (
     <>
@@ -561,7 +564,7 @@ export function CompanyOffersPage() {
         }
       />
 
-      {offers ? <CompanyOffersStats offers={offers} /> : null}
+      {offers ? <CompanyOffersStats summary={summary} /> : null}
 
       {actionError ? (
         <p role="alert" className="rounded-lg bg-chipVoid px-4 py-3 text-13 text-void">
@@ -576,7 +579,7 @@ export function CompanyOffersPage() {
         empty={
           <EmptyState
             title="Todavía no has publicado ofertas"
-            description="Publicá una vacante para que los estudiantes puedan postular."
+            description="Publica una vacante para que los estudiantes puedan postular."
             action={
               <Button type="button" size="sm" onClick={openDialog}>
                 Publicar oferta
@@ -600,6 +603,7 @@ export function CompanyOffersPage() {
           </OfferGrid>
         )}
       </AsyncSection>
+      {pager.controls(total, offers === undefined)}
 
       <CreateOfferDialog
         open={dialogOpen}

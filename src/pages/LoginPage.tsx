@@ -72,7 +72,7 @@ export function LoginPage() {
     try {
       if (mode === 'register') {
         if (!fullName.trim()) {
-          setError('Ingresá tu nombre completo')
+          setError('Ingresa tu nombre completo')
           setSubmitting(false)
           return
         }
@@ -124,7 +124,7 @@ export function LoginPage() {
             </h1>
             <p className="mt-0.5 text-13 text-inkMid">
               {mode === 'register'
-                ? 'Creá tu cuenta institucional para postular a ofertas y registrar tus horas.'
+                ? 'Crea tu cuenta institucional para postular a ofertas y registrar tus horas.'
                 : 'Con el correo institucional que te dio la unidad de vinculación.'}
             </p>
           </div>

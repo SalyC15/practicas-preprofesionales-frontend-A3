@@ -8,6 +8,14 @@ vi.mock('@/offline/sync/scheduler', () => ({ startSync: () => () => {} }))
 vi.mock('@/components/SyncIndicator', () => ({ SyncIndicator: () => null }))
 afterEach(() => { vi.unstubAllGlobals(); localStorage.clear() })
 
+it('no muestra una advertencia de vencimiento al iniciar una sesión de quince minutos', () => {
+  const user = { id: 1, email: 'a@example.test', fullName: 'Ana', role: 'STUDENT', companyId: null }
+  localStorage.setItem('auth_session', JSON.stringify({ accessToken: 'new', user, expiresAt: Date.now() + 900_000, revision: 'new' }))
+  render(<MemoryRouter><AuthProvider><AppLayout /></AuthProvider></MemoryRouter>)
+  expect(screen.queryByText(/Tu sesión vence/)).not.toBeInTheDocument()
+  expect(screen.getByRole('button', { name: 'Renovar sesión' })).toBeInTheDocument()
+})
+
 it('renews only on an explicit action and publishes the rotated token', async () => {
   const user = { id: 1, email: 'a@example.test', fullName: 'Ana', role: 'STUDENT', companyId: null }
   localStorage.setItem('auth_session', JSON.stringify({ accessToken: 'old', user, expiresAt: Date.now() + 60_000, revision: 'old' }))
@@ -17,7 +25,7 @@ it('renews only on an explicit action and publishes the rotated token', async ()
   vi.stubGlobal('fetch', fetchMock)
   vi.stubGlobal('navigator', { locks: { request: async (_name: string, work: () => Promise<unknown>) => work() } })
   render(<MemoryRouter><AuthProvider><AppLayout /></AuthProvider></MemoryRouter>)
-  expect(screen.getByRole('status')).toHaveTextContent('Podés renovarla antes de que expire')
+  expect(screen.getByRole('status')).toHaveTextContent('Puedes renovarla antes de que expire')
   expect(fetchMock).not.toHaveBeenCalled()
   fireEvent.click(screen.getByRole('button', { name: 'Renovar sesión' }))
   await waitFor(() => expect(localStorage.getItem('access_token')).toBe('rotated'))

@@ -1,9 +1,11 @@
 import { useState } from 'react'
+import { useLiveQuery } from 'dexie-react-hooks'
+import { db } from '@/offline/db'
 import { Button } from '@/components/ui/button'
 import { useOnline } from '@/offline/hooks/useOnline'
 import { useSyncStatus } from '@/offline/hooks/useSyncStatus'
 import { syncNow } from '@/offline/sync/scheduler'
-import { cn } from '@/lib/utils'
+import { cn, plural } from '@/lib/utils'
 
 function formatTime(iso: string | null): string {
   if (!iso) return '—'
@@ -15,8 +17,10 @@ function formatTime(iso: string | null): string {
 
 export function SyncIndicator() {
   const online = useOnline()
-  const { pending, lastSyncAt, syncing } = useSyncStatus()
+  const { lastSyncAt, syncing } = useSyncStatus()
+  const pending = useLiveQuery(() => db.outbox.count(), [])
   const [triggering, setTriggering] = useState(false)
+  const pendingLabel = pending === undefined ? 'Consultando pendientes…' : plural(pending, 'pendiente', 'pendientes')
 
   const busy = syncing || triggering
 
@@ -50,8 +54,8 @@ export function SyncIndicator() {
       </div>
 
       <p className="mt-1 text-12 leading-relaxed text-inkSoft">
-        <span className={cn('font-data', pending > 0 && 'font-semibold text-pending')}>
-          {pending} pendiente{pending === 1 ? '' : 's'}
+        <span className={cn('font-data', pending !== undefined && pending > 0 && 'font-semibold text-pending')}>
+          {pendingLabel}
         </span>
         {' · última sinc. '}
         <span className="font-data">{formatTime(lastSyncAt)}</span>

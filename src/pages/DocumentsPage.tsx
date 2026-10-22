@@ -1,3 +1,4 @@
+import { usePageState } from '@/components/usePageState'
 import { type ChangeEvent, type FormEvent, useRef, useState } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { ApiError, api } from '@/api/client'
@@ -65,7 +66,7 @@ function RequiredDocuments({ documents }: { documents: LocalDocument[] | undefin
   )
 }
 
-function DocumentsList({ documents }: { documents: LocalDocument[] | undefined }) {
+function DocumentsList({ documents, total }: { documents: LocalDocument[] | undefined; total?: number }) {
   if (documents === undefined) {
     return (
       <Section title="Todos tus documentos">
@@ -90,7 +91,7 @@ function DocumentsList({ documents }: { documents: LocalDocument[] | undefined }
       title="Todos tus documentos"
       aside={
         <span className="font-data text-12 text-inkSoft">
-          {plural(documents.length, 'documento', 'documentos')}
+          {plural(total ?? documents.length, 'documento', 'documentos')}
         </span>
       }
     >
@@ -114,10 +115,18 @@ function DocumentsList({ documents }: { documents: LocalDocument[] | undefined }
 
 export function DocumentsPage() {
   const placement = usePlacement()
-  const documents = useLiveQuery<LocalDocument[] | undefined>(async () => {
+  const pager = usePageState()
+  const result = useLiveQuery(async () => {
     if (!placement) return undefined
-    return db.documents.where('placementId').equals(placement.id).toArray()
-  }, [placement?.id])
+    const total = await db.documents.where('placementId').equals(placement.id).count()
+    const items = await db.documents.where('placementId').equals(placement.id).reverse().offset(pager.offset).limit(pager.pageSize).toArray()
+    const required = new Map<string, LocalDocument>()
+    await db.documents.where('placementId').equals(placement.id).each((doc) => {
+      if (REQUIRED_KINDS.includes(doc.kind as typeof REQUIRED_KINDS[number]) && (!required.has(doc.kind) || required.get(doc.kind)!.updatedAt < doc.updatedAt)) required.set(doc.kind, doc)
+    })
+    return { total, items, required: [...required.values()] }
+  }, [placement?.id, pager.page, pager.pageSize])
+  const documents = result?.items
 
   const [kind, setKind] = useState<DocumentKind>('AGREEMENT')
   const [uploading, setUploading] = useState(false)
@@ -183,7 +192,7 @@ export function DocumentsPage() {
         subtitle="A diferencia del libro de horas, subir un documento necesita conexión."
       />
 
-      <RequiredDocuments documents={documents} />
+      <RequiredDocuments documents={result?.required} />
 
       <Section title="Subir documento">
         <form className="flex flex-col gap-4 px-[18px] py-4" onSubmit={handleUpload} noValidate>
@@ -228,7 +237,9 @@ export function DocumentsPage() {
         </form>
       </Section>
 
-      <DocumentsList documents={documents} />
+      <DocumentsList documents={documents} total={result?.total} />
+      {result && pager.controls(result.total)}
     </>
   )
 }
+

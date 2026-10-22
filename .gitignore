@@ -7,3 +7,6 @@ eslint-report.json
 .env
 .yura-ci/
 odd/
+
+*.log
+qa-*

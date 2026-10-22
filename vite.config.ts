@@ -1,9 +1,18 @@
 import path from 'node:path'
+import { Agent } from 'node:http'
 import react from '@vitejs/plugin-react'
 import { defineConfig } from 'vite'
 import { VitePWA } from 'vite-plugin-pwa'
 
 export default defineConfig({
+  server: {
+    allowedHosts: ['yura.mrebs.com'],
+    proxy: { '/api': { target: 'http://127.0.0.1:3000', changeOrigin: true, agent: new Agent({ keepAlive: false }) } },
+  },
+  preview: {
+    allowedHosts: ['yura.mrebs.com'],
+    proxy: { '/api': { target: 'http://127.0.0.1:3000', changeOrigin: true, agent: new Agent({ keepAlive: false }) } },
+  },
   plugins: [
     react(),
     VitePWA({

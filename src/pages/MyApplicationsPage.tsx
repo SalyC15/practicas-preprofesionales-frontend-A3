@@ -1,6 +1,7 @@
+import { usePageState } from '@/components/usePageState'
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { type Application, listMine } from '@/api/applications'
+import { type Application, listMinePage } from '@/api/applications'
 import { ApiError } from '@/api/client'
 import { PageHeader } from '@/components/PageHeader'
 import {
@@ -34,14 +35,17 @@ function ColumnHeader() {
 }
 
 export function MyApplicationsPage() {
+  const pager = usePageState()
+  const [total, setTotal] = useState(0)
   const [applications, setApplications] = useState<Application[] | undefined>(undefined)
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
     let cancelled = false
-    listMine()
+    setApplications(undefined)
+    listMinePage(pager.page, pager.pageSize)
       .then((data) => {
-        if (!cancelled) setApplications(data)
+        if (!cancelled) { setApplications(data.items); setTotal(data.total) }
       })
       .catch((err) => {
         if (!cancelled) setError(err instanceof ApiError ? err.message : 'No se pudieron cargar tus postulaciones')
@@ -49,7 +53,7 @@ export function MyApplicationsPage() {
     return () => {
       cancelled = true
     }
-  }, [])
+  }, [pager.page, pager.pageSize])
 
   return (
     <>
@@ -62,9 +66,9 @@ export function MyApplicationsPage() {
         toolbar={
           applications && applications.length > 0 ? (
             <span className="ml-auto font-data text-12 text-inkSoft">
-              {applications.length === 1
+              {total === 1
                 ? '1 postulación'
-                : `${applications.length} postulaciones`}
+                : `${total} postulaciones`}
             </span>
           ) : undefined
         }
@@ -76,7 +80,7 @@ export function MyApplicationsPage() {
         ) : applications.length === 0 ? (
           <EmptyState
             title="Todavía no has postulado a ninguna oferta"
-            description="Mirá las ofertas abiertas y postulá a la que te sirva."
+            description="Mira las ofertas abiertas y postula a la que te sirva."
             action={
               <Button asChild size="sm">
                 <Link to="/ofertas">Ver ofertas</Link>
@@ -104,6 +108,7 @@ export function MyApplicationsPage() {
           </Ledger>
         )}
       </Panel>
+      {pager.controls(total, applications === undefined)}
     </>
   )
 }

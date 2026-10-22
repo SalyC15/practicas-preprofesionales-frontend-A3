@@ -39,8 +39,10 @@ async function runSync(): Promise<void> {
     }
 
     if (isFenceCurrent(fence)) {
-      setStatus({ syncing: false, lastSyncAt: new Date().toISOString() })
-      setStatus({ pending: await db.outbox.count() })
+      const pending = await db.outbox.count()
+      if (isFenceCurrent(fence)) {
+        setStatus({ syncing: false, lastSyncAt: new Date().toISOString(), pending })
+      }
     }
   } catch (err) {
     if (isFenceCurrent(fence)) {

@@ -11,7 +11,7 @@ export function Ledger({ header, children, className }: LedgerProps) {
   return (
     <div className={cn('divide-y divide-paperRule', className)}>
       {header ? (
-        <div className="bg-well font-display text-12 text-inkSoft">{header}</div>
+        <div className="bg-well font-display text-13 font-medium text-inkSoft">{header}</div>
       ) : null}
       {children}
     </div>

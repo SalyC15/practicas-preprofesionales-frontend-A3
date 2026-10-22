@@ -81,3 +81,7 @@ db.version(1).stores({
   outbox: '++id, clientOpId, entity, createdAt',
   meta: 'key',
 })
+
+db.version(2).stores({
+  hourLogs: 'id, placementId, status, date, syncState, updatedAt, [placementId+date+id]',
+})
